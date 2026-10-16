@@ -19,7 +19,14 @@ Two pages:
 
 ## Page 1: Customer control panel
 
-**Auth (v1):** the authority ID from the customer's credentials package. It's the control key — paste it, or open it from the link in the credentials email. If it leaks, the worst case is someone stops *your own* agent: no widening, no impersonation, no lateral movement.
+**Auth (v1):** two pieces from the credentials package. The authority ID gets you
+read-only status. Kill and replace additionally require the **control secret**
+— issued at onboarding, delivered in the human's credentials email, **never
+placed on the agent's server**. The agent learns its own authority ID from
+check responses, so the ID alone is not enough for kill/replace: a compromised
+agent holding it must not be able to widen itself. If the control secret leaks,
+the worst case is someone stops or reconfigures *your own* agent within the
+policy rails — no widening beyond the rails, no touching anyone else.
 
 **Auth (v2):** human UCII identity sign-in, authorized through the existing `HumanGovernanceRelationship` (`GRANT_DELEGATED_AUTHORITY` / `REVOKE_DELEGATED_AUTHORITY`). This is where the identity-vault web sign-in plugs in.
 

@@ -33,9 +33,12 @@
 <p class="fine">Manage your gated agent's authority. Your agent's identity never changes — only its grants do.</p>
 
 <div class="card">
-  <h2>1. Your authority</h2>
+  <h2>1. Your credentials</h2>
   <label>Authority ID (from your credentials email)
     <input type="text" id="authId" placeholder="paste authority ID" autocomplete="off">
+  </label>
+  <label>Control secret (from your credentials email — never share it, never put it on your agent's server)
+    <input type="text" id="ctrlSecret" placeholder="paste control secret" autocomplete="off">
   </label>
   <button class="primary" id="loadBtn" onclick="loadAuthority()">Load</button>
   <div class="msg" id="loadMsg"></div>
@@ -103,18 +106,26 @@ function api(path, method, body) {
 function needServer(what) {
   return "This needs the server endpoint (" + what + ") — see API-CONTRACT.md. It is not wired up yet.";
 }
-let current = null; // { authority_id, identity_id, ... }
+let current = null; // { authority_id, identity_id, control_secret }
+
+// control secret: human-held, never on the agent's server.
+// kill/replace require it; the agent knowing its own authority ID is not enough.
+function getSecrets() {
+  const authority_id = document.getElementById("authId").value.trim();
+  const control_secret = document.getElementById("ctrlSecret").value.trim();
+  return { authority_id, control_secret };
+}
 
 // ---- 1+2. load + status ----
 async function loadAuthority() {
   clearMsg("loadMsg");
-  const id = document.getElementById("authId").value.trim();
+  const { authority_id: id, control_secret } = getSecrets();
   if (!id) { msg("loadMsg", "Paste your authority ID first.", "err"); return; }
   msg("loadMsg", "Loading…", "info");
   try {
     // GET /v1/authorization/delegated/{authority_id} — NEEDS ADDING (see API-CONTRACT.md)
     const a = await api("/v1/authorization/delegated/" + encodeURIComponent(id));
-    current = { authority_id: id, identity_id: a.identity_id };
+    current = { authority_id: id, identity_id: a.identity_id, control_secret };
     document.getElementById("statusBody").innerHTML =
       '<div>Agent identity: <code>' + esc(a.identity_id) + '</code></div>' +
       '<div>Status: <span class="status ' + (a.authority_state === "ACTIVE" ? "active" : "revoked") + '">' + esc(a.authority_state) + '</span></div>' +
@@ -138,12 +149,13 @@ async function replaceGrant() {
   clearMsg("replaceMsg");
   const ops = [...document.querySelectorAll(".op:checked")].map((cb) => cb.value);
   if (!ops.length) { msg("replaceMsg", "Pick at least one operation.", "err"); return; }
+  if (!current.control_secret) { msg("replaceMsg", "Paste your control secret first — replacing a grant requires human proof.", "err"); return; }
   if (!confirm("Replace this grant? The old grant is revoked and a new one begins. Same identity.")) return;
   msg("replaceMsg", "Working…", "info");
   try {
     // POST /v1/authorization/delegated/{authority_id}/replace — NEEDS ADDING (see API-CONTRACT.md)
     const r = await api("/v1/authorization/delegated/" + encodeURIComponent(current.authority_id) + "/replace",
-      "POST", { allowed_operations: ops });
+      "POST", { control_secret: current.control_secret, allowed_operations: ops });
     document.getElementById("authId").value = r.authority_id;
     msg("replaceMsg", "New grant active: " + r.authority_id + ". Update your credentials email with the new ID.", "ok");
     loadAuthority();
@@ -156,12 +168,13 @@ async function replaceGrant() {
 // ---- 4. kill ----
 async function killGrant() {
   clearMsg("killMsg");
+  if (!current.control_secret) { msg("killMsg", "Paste your control secret first — killing a grant requires human proof.", "err"); return; }
   if (!confirm("Revoke this grant? Your agent stops on its next check. This can't be undone — a new grant starts fresh.")) return;
   msg("killMsg", "Working…", "info");
   try {
     // POST /v1/authorization/delegated/{authority_id}/customer-revoke — NEEDS ADDING (see API-CONTRACT.md)
     await api("/v1/authorization/delegated/" + encodeURIComponent(current.authority_id) + "/customer-revoke",
-      "POST", { reason: "customer kill switch" });
+      "POST", { control_secret: current.control_secret, reason: "customer kill switch" });
     msg("killMsg", "Grant revoked. Your agent is stopped.", "ok");
     loadAuthority();
   } catch (e) {
