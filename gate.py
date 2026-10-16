@@ -88,6 +88,9 @@ GIT_PATTERNS = [
 
 FILE_OP_PATTERNS = [
     r"^\s*(mkdir|touch|cp|mv|ln|chmod|chown|tee|unzip|tar|rsync|scp)\b",
+    # Modern scp(1) runs the SFTP subsystem: SSH_ORIGINAL_COMMAND is the
+    # sftp-server binary, not "scp -t". Treat it as a file transfer.
+    r"sftp-server",
 ]
 
 SERVICE_PATTERNS = [
@@ -225,7 +228,12 @@ def ucii_check(command, cmd_class):
         return None  # not wired up yet
 
     try:
-        import oqs
+        # oqs prints to stdout on import ("faulthandler is disabled"),
+        # which breaks scp/sftp protocol. Silence it.
+        import io
+        import contextlib
+        with contextlib.redirect_stdout(io.StringIO()):
+            import oqs
     except ImportError:
         return None  # oqs missing; fall back
 
