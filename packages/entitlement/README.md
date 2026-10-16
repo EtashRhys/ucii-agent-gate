@@ -33,9 +33,19 @@ Everything else is denied and logged.
 
 ## Renewal
 
-Update `expires_at`. That's the entire renewal flow — one line, no
-key rotation, no re-install. An expired subscription fails closed:
-the gate denies every command with "subscription expired" until renewed.
+There is nothing to renew on your end. Your agent's authority is
+ACTIVE until revoked — no expiry date, no new package, no
+re-install, ever.
+
+The monthly flow, from the operator's side:
+
+- **You pay** → nothing happens. The grant stays active, your agent
+  keeps working.
+- **You stop paying** → the operator revokes that one authority.
+  From that second, every command is denied.
+
+That's the entire renewal model. The credentials you received on day
+one are the last ones you'll ever need.
 
 ## Suggested scope defaults
 
@@ -99,7 +109,16 @@ You pay, your agent gets wrapped, the gate enforces your scopes.
 
 ## Renewal
 
-The owner updates `expires_at` when your next payment arrives. That's
-the entire renewal flow — one line, no key rotation, no re-install.
-An expired subscription fails closed: the gate denies every command
-with "subscription expired" until renewed.
+There is nothing to renew on your end. Your agent's authority is
+ACTIVE until revoked — no expiry date, no new package, no
+re-install, ever.
+
+The monthly flow, from the operator's side:
+
+- **You pay** → nothing happens. The grant stays active, your agent
+  keeps working.
+- **You stop paying** → the operator revokes that one authority.
+  From that second, every command is denied.
+
+That's the entire renewal model. The credentials you received on day
+one are the last ones you'll ever need.
