@@ -1,5 +1,7 @@
 # UCII Agent Gate
 
+Everyone's trying to build AI agents you can trust. We stopped trying — instead we made trust unnecessary. Every command is checked against an authority you granted, the agent can't exceed it, and you can revoke it all in one click.
+
 Give your AI agent SSH access to your server **without giving it the keys
 to the kingdom.** Every command it tries to run is classified, checked
 against your UCII server (identity + delegated authority,
