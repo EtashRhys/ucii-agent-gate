@@ -84,8 +84,8 @@ revoked deliberately, and never restored without a trace.
 
 | Plan | Price |
 |---|---|
-| Monthly | **$49 CAD/month** |
-| Yearly | **$490 CAD/year** (two months free) |
+| Monthly | **$49 CAD/month per agent** |
+| Yearly | **$490 CAD/year per agent** (two months free) |
 
 Payment is by **Interac e-Transfer** (Canada):
 
