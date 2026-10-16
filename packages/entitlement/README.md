@@ -45,6 +45,41 @@ the gate denies every command with "subscription expired" until renewed.
 | Repo scope | 1 repo | org-wide |
 | Destructive | deny (grant per-case) | deny (grant per-case) |
 
+## What you're buying: the authority lifecycle
+
+This is the part that makes the gate worth paying for. Here's exactly
+how authority works, in plain language.
+
+**Grant — specific, never blanket.** When your subscription activates,
+the server owner grants your agent a *delegated authority*: a signed
+record naming the exact operations your agent may perform (for
+example: read files, run git, manage services). There are no
+wildcards — every permitted operation is listed by name. Anything not
+listed is denied. The grant is active the moment the owner approves it.
+
+**Authorization — checked on every command.** Each time your agent
+runs a command, the gate classifies it (read, git, file operation,
+service, destructive, unknown) and asks the UCII server: *does this
+agent hold an active authority covering this operation?* The request
+is cryptographically signed with your agent's post-quantum credential,
+so it can't be forged. The server decides; the gate enforces. If the
+server can't be reached, the gate denies — it never fails open.
+
+**Revoke — one grant, deliberately.** The owner can revoke a single
+authority at any time, stating a reason. Revocation is immediate:
+from that moment, every command under that grant is denied. You can't
+revoke "everything" with one vague action — each revocation names one
+exact authority, so it's always clear what was cut and why.
+
+**Re-grant — no quiet undo.** A revoked authority stays revoked,
+permanently. There is no "un-revoke." If access needs to be restored,
+the owner issues a brand-new grant with a new ID. That means every
+restoration is a fresh, logged event with the owner's name on it —
+nobody can silently switch your agent back on.
+
+In short: authority is granted specifically, checked constantly,
+revoked deliberately, and never restored without a trace.
+
 ## Pricing & payment
 
 | Plan | Price |
