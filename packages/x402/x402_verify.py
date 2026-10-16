@@ -13,7 +13,7 @@ PRODUCTION INTEGRATION (required before charging real money):
   - Run or choose an x402 facilitator (see https://github.com/coinbase/x402).
   - Set the facilitator URL + accepted asset/network in policy.json under
     policy["x402"] = {"facilitator_url": ..., "asset": "USDC",
-                      "network": "base", "prices": {"read": "0.001", ...}}.
+                      "network": "base", "prices": {"read": "0.005", ...}}.
   - Replace the stub below with a real facilitator verify call:
     POST {facilitator_url}/verify  {paymentPayload, paymentRequirements}
 
@@ -48,7 +48,7 @@ def verify_payment(receipt, cmd_class, policy):
     if "paymentPayload" not in r or "paymentRequirements" not in r:
         return False, "receipt missing x402 fields"
 
-    price = prices.get(cmd_class, prices.get("default", "0.001"))
+    price = prices.get(cmd_class, prices.get("default", "0.02"))
 
     if DRY_RUN:
         return True, "dry-run: would charge %s USDC for class '%s'" % (

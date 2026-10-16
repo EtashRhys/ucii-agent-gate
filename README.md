@@ -85,9 +85,9 @@ No terminal required on your end, ever.
 
 | Plan | Price | For |
 |---|---|---|
-| **Monthly** | **$49 CAD/month per agent** | Full protection, cancel anytime. |
-| **Yearly** | **$490 CAD/year per agent** | Two months free. Same protection, committed. |
-| **Pay-per-use** | x402 micropayments | Prefer per-command billing? See `packages/x402/`. USDC per command class. |
+| **Monthly** | **$49 CAD/month** | Full protection, cancel anytime. |
+| **Yearly** | **$490 CAD/year** | Two months free. Same protection, committed. |
+| **Pay-per-use** | x402 micropayments (USDC) | Prefer per-command billing? ~$12/mo light use, breaks even with flat rate around 60 commands/day. See `packages/x402/`. |
 
 Flat-rate plans are paid by Interac e-Transfer (Canada) — see
 `packages/entitlement/` for payment details. No payment processor cut,
@@ -138,36 +138,6 @@ agent runs from that point is classified, authorized, and logged.
 
 Questions? The authority lifecycle (what your $49 actually buys) is
 explained in `packages/entitlement/`.
-
-## Fine print
-
-Five things worth knowing before you pay.
-
-**It's per agent.** $49/month covers one agent's identity. Three
-agents, three subscriptions. Each agent gets its own UCII identity,
-its own authority, its own audit trail.
-
-**Cancellation is clean.** Cancel anytime — the operator revokes your
-agent's authority and the gate denies everything from that moment.
-No zombie access, no lingering permissions, no "did we actually turn
-it off." One revocation, done.
-
-**The operator sees every command.** Your UCII server authorizes each
-command, which means the command text passes through the operator's
-hands. That's how the protection works — there's no way to authorize
-what you can't see. Know it going in.
-
-**If the UCII server is down, your agent stops.** The gate fails
-closed: unreachable server means every command is denied until it's
-back. That's the right design — but it makes the operator's server a
-dependency. Your agent can't work without it.
-
-**Destructive operations cost extra.** Commands like `rm -rf`,
-disk wipes, and shutdowns are never in the standard grant. When you
-legitimately need one — wiping a staging environment, a migration
-that drops tables, decommissioning a server — email the operator with
-what, why, and when. A time-boxed grant (2-hour window, scoped to the
-specific command) is **$25 CAD**, paid by Interac to the same address.
 
 ## Safety
 

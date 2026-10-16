@@ -18,14 +18,28 @@ command, the gate verifies it with a facilitator, then executes.
   "asset": "USDC",
   "network": "base",
   "prices": {
-    "read": "0.001",
-    "git": "0.01",
-    "file-op": "0.01",
-    "service": "0.05",
-    "default": "0.01"
+    "read": "0.005",
+    "git": "0.02",
+    "file-op": "0.05",
+    "service": "0.10",
+    "default": "0.02"
   }
 }
 ```
+
+**What this costs in practice** (USDC, per command class):
+
+| Command class | Price | Example |
+|---|---|---|
+| read | $0.005 | status checks, `uptime`, `ls` |
+| git | $0.02 | pull, push, clone |
+| file-op | $0.05 | uploads, writes, `scp` |
+| service | $0.10 | restarts, `systemctl` |
+
+A light user (~20 commands/day) pays roughly $12/month. Around
+60 commands/day, pay-per-use and the $49 flat rate break even —
+heavier than that, the flat-rate subscription is the better deal.
+Pay-per-use is the on-ramp; flat rate is the home.
 
 2. The agent's client presents the payment receipt as the
 `UCII_X402_RECEIPT` env var when opening the SSH session
