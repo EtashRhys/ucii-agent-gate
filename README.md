@@ -90,6 +90,42 @@ your agent.
 If none of this sounds worth $49/month to you, this isn't your
 software. If it does — keep reading.
 
+## How to get protected
+
+Getting your agent, device, or robot under UCII protection takes four
+steps. You do two, the operator does two.
+
+**1. You: install the gate.** Clone this repo and run the installer on
+the server your agent connects to:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/EtashRhys/ucii-agent-gate/main/install.sh | bash
+```
+
+This puts `gate.py` on your server. It doesn't do anything yet — it's
+waiting to be wired to a UCII identity.
+
+**2. You: send payment + your agent's name.** Send an Interac
+e-Transfer to **bradphee@gmail.com** ($49 CAD monthly, $490 CAD
+yearly) and put your **agent's name** in the transfer message. That's
+all the operator needs from you.
+
+**3. Operator: wires you up.** On receiving payment, the operator
+provisions your agent's UCII identity, builds its lifecycle service,
+and grants its delegated authority — the signed record of exactly
+what your agent is allowed to do. Nothing is blanket, nothing is
+assumed.
+
+**4. Operator: ships your package.** You'll get a reply email with
+everything your gate needs: your agent's identity ID, its signing
+credential, the UCII server endpoint, and the authority details. Drop
+those into your gate config, add the one `authorized_keys` line, and
+you're protected. Every command your agent runs from that point is
+classified, authorized, and logged.
+
+Questions? The authority lifecycle (what your $49 actually buys) is
+explained in `packages/entitlement/`.
+
 ## Wrapping an agent (joining the UCII family)
 
 > [!IMPORTANT]
