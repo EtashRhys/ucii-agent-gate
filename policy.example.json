@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "owner": "YOUR_NAME_OR_HANDLE",
+  "note": "Starter policy. Replace agents with your own. Owner entitlement = your own AI: everything except destructive allowed+logged; destructive needs your explicit grant.",
+  "agents": {
+    "my-agent": {
+      "entitlement": "owner",
+      "expires_at": null,
+      "note": "Your own AI dev station. No payment needed - you own the system."
+    }
+  },
+  "grants": [],
+  "_grant_template": {
+    "id": "grant-001",
+    "agent": "my-agent",
+    "command_pattern": "rm -rf /srv/staging/old",
+    "granted_by": "YOUR_NAME_OR_HANDLE",
+    "granted_at": "2026-10-15T00:00:00+00:00",
+    "expires_at": "2026-10-16T00:00:00+00:00",
+    "reason": "example - copy this shape for real grants"
+  }
+}
