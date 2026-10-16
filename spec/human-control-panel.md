@@ -4,7 +4,7 @@ Version: 1
 
 ## Purpose
 
-After onboarding, the human customer manages their own agent's grants. Brad's job ends at onboarding + identity issuance + policy rails. Everything below is the customer operating their own controls — no operator involvement per action.
+After onboarding, the human customer manages their own agent's grants. The UCII Admin's job ends at onboarding + identity issuance + policy rails. Everything below is the customer operating their own controls — no operator involvement per action.
 
 The model: **the operator grants, the customer manages.** The human is the principal, the agent is the delegate. The agent can never widen its own authority — that rule is unchanged and lives in the gate, not in this UI.
 
@@ -15,7 +15,7 @@ The UI is served by the UCII server itself — web pages, device-agnostic (phone
 Two pages:
 
 1. **Customer control panel** — the human managing their agent.
-2. **Operator page** — Brad seeing every authority and revoking any of them.
+2. **Operator page** — the UCII Admin seeing every authority and revoking any of them.
 
 ## Page 1: Customer control panel
 
@@ -36,7 +36,7 @@ Underneath, this is two existing calls back to back:
 
 **Kill.** Revoke with a reason, one confirm, immediate. The agent stops on its next check. If they kill it, they kill it.
 
-**Destructive window.** Destructive is never a standing grant — that's a policy rail, not a UI choice. The panel offers the existing scoped flow: $25, 2-hour window, one command. Self-serve through the panel; Brad doesn't hand-issue these.
+**Destructive window.** Destructive is never a standing grant — that's a policy rail, not a UI choice. The panel offers the existing scoped flow: $25, 2-hour window, one command. Self-serve through the panel; the UCII Admin doesn't hand-issue these.
 
 ## Page 2: Operator page
 
@@ -46,14 +46,14 @@ Underneath, this is two existing calls back to back:
 
 **Revoke.** One button per row, one confirm. Immediate, logged, irreversible — restoration is a new grant, per the standing rule.
 
-Brad never needs this page for routine customer actions — customers manage themselves. It's the fire axe: abuse, non-payment, compromise.
+The UCII Admin never needs this page for routine customer actions — customers manage themselves. It's the fire axe: abuse, non-payment, compromise.
 
-## Policy rails (Brad's, enforced server-side — not UI suggestions)
+## Policy rails (UCII Admin's, enforced server-side — not UI suggestions)
 
 - Destructive is never a standing grant. Only the scoped $25 / 2-hour / one-command flow.
 - Customers can only grant operation classes the product offers. No custom classes, no escalation paths.
 - The gate still checks every command against the UCII server. The panel changes *grants*; it doesn't bypass *checks*.
-- Billing: the $49/month subscription covers the gating service and unlimited grant rotations. Mid-month kill: no refund — stated plainly at purchase. (Brad's policy call, recorded here.)
+- Billing: the $49/month subscription covers the gating service and unlimited grant rotations. Mid-month kill: no refund — stated plainly at purchase. (UCII Admin's policy call, recorded here.)
 
 ## Endpoint map (all exist today)
 

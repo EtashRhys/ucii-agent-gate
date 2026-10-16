@@ -8,16 +8,16 @@ Install the agent's public key in ~/.ssh/authorized_keys with:
 Every SSH command from that key lands here. The gate:
 
   1. Classifies the command (read/git/file-op/service/destructive).
-  2. Asks Brad's UCII server — POST /v1/authorization/delegated/check —
+  2. Asks the UCII Admin server — POST /v1/authorization/delegated/check —
      signed with the agent's UCII credential (ML-DSA-65). The SERVER
      decides; the gate enforces. This endpoint is free (not x402-metered).
   3. Falls back to local policy.json ONLY for the owner entitlement,
      and logs the fallback. (Fail-closed for everyone else.)
   4. Writes one line per decision to audit.log.
 
-Setup (one time, needs Brad's controller authority):
+Setup (one time, needs the UCII Admin's controller authority):
   a. Generate a keypair:  python3 scripts/ucii_setup.py --gen-key
-  b. Brad registers the AI_AGENT identity + credential on the UCII server
+  b. The UCII Admin registers the AI_AGENT identity + credential on the UCII server
      and grants delegated authority for ssh.exec:* operations.
   c. Save the credential to ucii_credential.json (mode 600).
   Until then, the gate runs on local policy.json and says so in the audit log.
@@ -191,7 +191,7 @@ def classify_parts(command):
     return [(p, classify_single(p)) for p in parts]
 
 
-# Command class -> UCII operation string (what Brad grants).
+# Command class -> UCII operation string (what the UCII Admin grants).
 CLASS_TO_OPERATION = {
     "read": "ssh.exec:read",
     "git": "ssh.exec:git",
