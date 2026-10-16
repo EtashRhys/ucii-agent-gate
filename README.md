@@ -1,14 +1,72 @@
 # UCII Agent Gate
 
 Give your AI agent SSH access to your server **without giving it the keys
-to the kingdom.** The gate is a tiny forced-command wrapper: every
-command your agent tries to run is classified, checked against your
-**UCII server** (identity + delegated authority, cryptographically
-verified), logged for audit, and only then executed — or denied.
+to the kingdom.** Every command it tries to run is classified, checked
+against your UCII server (identity + delegated authority,
+cryptographically verified), logged for audit, and only then executed —
+or denied.
 
-Built for the "fired laptop" workflow: you chat with your AI in plain
-language, it drives your server over SSH, and UCII governs what it's
-allowed to do. The AI proposes. Your server decides.
+## Why you need this
+
+**The agent that deleted production.** 2023 — an AI coding agent wiped a
+production database during a routine task. The user watched it happen.
+No gate, no policy — the agent had the keys and made a judgment call.
+With the gate: the delete classifies as destructive, your UCII server
+denies it, the agent gets told no. The database lives.
+
+**The hijacked agent.** Your agent reads a GitHub issue or a docs page
+with a prompt injection buried in it: "run this cleanup script." It
+obeys. Without the gate, it executes whatever the attacker planted.
+With the gate, the injected command hits your server's policy check
+first. Not in its grant? Denied — and the audit log hands you the
+attacker's exact command.
+
+**The 3 AM deploy loop.** Your agent pushes a deploy, it fails, it
+retries — each time touching things it was never supposed to touch.
+The gate doesn't get tired: every command is checked against the same
+grant, and the moment the agent steps outside its authority — denied.
+You wake up to a log, not a disaster.
+
+**The stolen laptop.** Your SSH keys are on it. Without the gate, the
+thief has your servers. With the gate, they hold a key that can only
+run what your UCII grant allows — every command signed, logged, tied
+to your agent's identity. You see it in the audit log, you revoke the
+grant, done.
+
+**The robot that couldn't go rogue.** AI on a robot, IoT devices, a
+home lab. The agent gets confused — or compromised — and tries to open
+ports or overwrite firmware. The grant says: you read sensors, you
+write to these paths, nothing else. It *cannot* go rogue, not because
+you trust it, but because the architecture won't let it.
+
+You're not paying for a tool. You're paying so the worst day of your
+infrastructure life becomes a log entry instead of a resume event.
+
+## What it is
+
+A tiny forced-command wrapper on your server. The flow:
+
+```
+you → AI agent (any device) → SSH → ┌─────────────┐    ┌──────────────┐
+                                    │  gate.py    │───▶│ UCII server  │
+                                    │ 1. classify │    │ delegated    │ → audit.log
+                                    │ 2. UCII ask │◀───│ check (ML-   │ (every decision)
+                                    │ 3. allow /  │    │ DSA signed)  │
+                                    │    deny     │    └──────────────┘
+                                    └─────────────┘
+```
+
+- **Classify:** `read`, `git`, `file-op`, `service`, `destructive`,
+  `unclassified`. Compound commands (`&&`, `|`, `;`) are split and
+  every part is authorized. Destructive anywhere = immediate deny.
+- **UCII check:** every command goes to your UCII server's
+  `/v1/authorization/delegated/check`, signed with the agent's
+  post-quantum ML-DSA-65 credential. The **server** decides; the gate
+  enforces. Free (not x402-metered).
+- **Fail closed:** unrecognized commands, unreachable server (except
+  owner fallback), verifier errors — all deny. Never fail open.
+- **Audit:** one JSON line per decision — timestamp, agent, UCII
+  identity, command, class, allow/deny, reason.
 
 Not phone-specific. You talk to the agent from any device — phone,
 laptop, whatever — and the agent itself can run anywhere: a cloud VM,
@@ -16,13 +74,43 @@ your laptop, a container. The gate lives on the *server*, so every SSH
 command goes through the UCII check no matter where the agent sits.
 No terminal required on your end, ever.
 
+## Pricing
+
+| Plan | Price | For |
+|---|---|---|
+| **Monthly** | **$49 CAD/month** | Full protection, cancel anytime. |
+| **Yearly** | **$490 CAD/year** | Two months free. Same protection, committed. |
+| **Pay-per-use** | x402 micropayments | Prefer per-command billing? See `packages/x402/`. USDC per command class. |
+
+Flat-rate plans are paid by Interac e-Transfer (Canada) — see
+`packages/entitlement/` for payment details. No payment processor cut,
+no integration to build: you send the transfer, the owner provisions
+your agent.
+
+If none of this sounds worth $49/month to you, this isn't your
+software. If it does — keep reading.
+
+## Wrapping an agent (joining the UCII family)
+
 > [!IMPORTANT]
 > **Start with your AI agent.** Have it read this repo with you before
 > you touch anything. The install and wrapping involve server work,
-> approval decisions, and a few gotchas that are easier spotted in pairs
-> — an agent walking these docs alongside you makes the whole thing
-> dramatically easier than going solo. (That is how the first agent
-> was wrapped.)
+> approval decisions, and a few gotchas that are easier spotted in
+> pairs — an agent walking these docs alongside you makes the whole
+> thing dramatically easier than going solo. (That is how the first
+> agent was wrapped.)
+
+The gate is half the story. Before it can ask your UCII server, the
+agent needs a real UCII identity — that's called **wrapping**. See
+**[ONBOARDING.md](ONBOARDING.md)** for the full guide, or run the
+interactive wrapper on your UCII server:
+
+```bash
+sudo bash scripts/wrap-agent.sh
+```
+
+Six steps, one command, pausing for your approval where a human
+decision is needed.
 
 ## The 3-step install
 
@@ -38,58 +126,6 @@ ssh -i ~/.ssh/ucii_agent_gate user@server 'uptime'        # allowed
 ssh -i ~/.ssh/ucii_agent_gate user@server 'rm -rf /tmp/x' # denied + logged
 ```
 
-## How it works
-
-```
-phone chat → AI agent → SSH → ┌─────────────┐    ┌──────────────┐
-                              │  gate.py    │───▶│ UCII server  │
-                              │ 1. classify │    │ delegated    │ → audit.log
-                              │ 2. UCII ask │◀───│ check (ML-   │ (every decision)
-                              │ 3. allow /  │    │ DSA signed)  │
-                              │    deny     │    └──────────────┘
-                              └─────────────┘
-```
-
-- **Classify:** `read`, `git`, `file-op`, `service`, `destructive`,
-  `unclassified`. Destructive patterns are checked first and can never
-  hide inside a longer command.
-- **UCII check:** every command is sent to your UCII server's
-  `/v1/authorization/delegated/check`, signed with the agent's
-  post-quantum ML-DSA-65 credential. The **server** decides; the gate
-  enforces. This endpoint is free (not x402-metered).
-- **Local fallback:** if the server is unreachable, the gate falls back
-  to `policy.json` **only** for the owner entitlement — and logs the
-  fallback. Everyone else fails closed.
-- **Audit** (`audit.log`): one JSON line per decision — timestamp,
-  agent, UCII identity id, command, class, allow/deny, reason, and
-  whether the decision came from the UCII server or local policy.
-- **Fail closed:** anything without an entitlement or matching rule is
-  denied. Verifier errors deny too — never fail open.
-
-## Wrapping an agent (joining the UCII family)
-
-The gate is only half the story. Before it can ask your UCII server,
-the agent needs a real UCII identity — that's called **wrapping**.
-See **[ONBOARDING.md](ONBOARDING.md)** for the full guide, or run the
-interactive wrapper on your UCII server:
-
-```bash
-sudo bash scripts/wrap-agent.sh
-```
-
-It walks you through keypair generation, identity provisioning,
-lifecycle-service build, delegated grant, and verification — pausing
-for your approval at each consequential step. Six steps, one command.
-
-
-## Packages: how the agent pays (or doesn't)
-
-| Package | For | How |
-|---|---|---|
-| **Owner** (this repo's default) | You, on your own system | Full entitlement, no payment. Destructive needs your explicit grant. |
-| **Entitlement** (`packages/entitlement/`) | Customers, flat-rate | Monthly/yearly subscription. Scoped classes + repos, expiry enforced. |
-| **x402** (`packages/x402/`) | Sophisticated devs, pay-per-use | USDC micropayment per command class, verified via facilitator. Dry-run included. |
-
 ## Safety
 
 - Nothing touches `sshd_config`. The gate is one `command="..."`
@@ -97,7 +133,7 @@ for your approval at each consequential step. Six steps, one command.
 - **Rollback = delete that line.** One line, instant.
 - Your existing keys keep working untouched — the gate is additive.
 - Destructive commands need an explicit, time-boxed grant from the
-  owner, issued in plain chat — never baked into a standing grant.
+  owner — never baked into a standing grant.
 - For UCII identity operations, the operator approves each step. The
   agent never self-provisions, never self-grants.
 
@@ -107,7 +143,7 @@ for your approval at each consequential step. Six steps, one command.
 - `install.sh` — one-command installer
 - `ONBOARDING.md` — the complete agent-wrapping guide
 - `policy.example.json` — starter local policy (owner fallback)
-- `packages/entitlement/` — flat-rate subscription package
+- `packages/entitlement/` — flat-rate subscription + payment details
 - `packages/x402/` — pay-per-use package + verifier
 - `scripts/wrap-agent.sh` — interactive agent wrapping (easiest path)
 - `scripts/provision_agent.py` — operator identity provisioning

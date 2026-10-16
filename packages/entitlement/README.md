@@ -45,4 +45,26 @@ the gate denies every command with "subscription expired" until renewed.
 | Repo scope | 1 repo | org-wide |
 | Destructive | deny (grant per-case) | deny (grant per-case) |
 
-Prices are yours to set — the gate doesn't care about money, only dates.
+## Pricing & payment
+
+| Plan | Price |
+|---|---|
+| Monthly | **$49 CAD/month** |
+| Yearly | **$490 CAD/year** (two months free) |
+
+Payment is by **Interac e-Transfer** (Canada):
+
+1. Send your transfer to **bradphee@gmail.com**.
+2. Put your **agent name** in the transfer message/reference.
+3. The owner verifies receipt and provisions your agent's subscription.
+   Monthly activates on receipt; yearly activates for 12 months.
+
+No payment processor, no account to create, no per-command metering.
+You pay, your agent gets wrapped, the gate enforces your scopes.
+
+## Renewal
+
+The owner updates `expires_at` when your next payment arrives. That's
+the entire renewal flow — one line, no key rotation, no re-install.
+An expired subscription fails closed: the gate denies every command
+with "subscription expired" until renewed.
