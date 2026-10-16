@@ -1,29 +1,50 @@
 #!/usr/bin/env python3
 """
-UCII Agent Gate — SSH forced-command wrapper.
+UCII Agent Gate v2 — SSH forced-command wrapper, UCII-authority edition.
 
 Install the agent's public key in ~/.ssh/authorized_keys with:
     command="/opt/ucii/ucii-agent-gate/gate.py" ssh-ed25519 AAAA...
 
-Every SSH command from that key lands here. The gate classifies the
-command, checks it against policy.json (identity + entitlement + rules),
-writes one line to audit.log, and either executes it or denies it.
+Every SSH command from that key lands here. The gate:
 
-Nothing here touches sshd_config. Removing the `command="..."` prefix
-from authorized_keys disables the gate instantly (rollback = one line).
+  1. Classifies the command (read/git/file-op/service/destructive).
+  2. Asks Brad's UCII server — POST /v1/authorization/delegated/check —
+     signed with the agent's UCII credential (ML-DSA-65). The SERVER
+     decides; the gate enforces. This endpoint is free (not x402-metered).
+  3. Falls back to local policy.json ONLY for the owner entitlement,
+     and logs the fallback. (Fail-closed for everyone else.)
+  4. Writes one line per decision to audit.log.
+
+Setup (one time, needs Brad's controller authority):
+  a. Generate a keypair:  python3 scripts/ucii_setup.py --gen-key
+  b. Brad registers the AI_AGENT identity + credential on the UCII server
+     and grants delegated authority for ssh.exec:* operations.
+  c. Save the credential to ucii_credential.json (mode 600).
+  Until then, the gate runs on local policy.json and says so in the audit log.
+
+Rollback: delete the `command="..."` prefix from authorized_keys. One line.
 """
 
+import base64
 import json
 import os
 import re
 import subprocess
 import sys
+import urllib.request
 from datetime import datetime, timezone
 
 GATE_DIR = os.path.dirname(os.path.abspath(__file__))
 POLICY_PATH = os.path.join(GATE_DIR, "policy.json")
+CREDENTIAL_PATH = os.path.join(GATE_DIR, "ucii_credential.json")
 AUDIT_PATH = os.path.join(GATE_DIR, "audit.log")
 IDENTITY_PATH = os.path.join(GATE_DIR, "identity.json")
+
+UCII_SERVER = os.environ.get("UCII_SERVER", "http://127.0.0.1:8000")
+# oqs (ML-DSA-65) lives in the UCII venv; make it importable.
+_VENV_SP = "/opt/ucii/UCII/.venv/lib/python3.12/site-packages"
+if os.path.isdir(_VENV_SP) and _VENV_SP not in sys.path:
+    sys.path.insert(0, _VENV_SP)
 
 
 def utcnow():
@@ -31,22 +52,20 @@ def utcnow():
 
 
 # ---------------------------------------------------------------------------
-# Command classification
+# Command classification (unchanged from v1)
 # ---------------------------------------------------------------------------
-# Order matters: first match wins. Destructive patterns are checked first
-# so they can never slip through inside a longer "innocent" command.
 
 DESTRUCTIVE_PATTERNS = [
-    r"\brm\s+[^;|&]*-[a-z]*r",          # rm -rf / rm -r
-    r"\bmkfs\b",                          # format a filesystem
-    r"\bdd\b[^;|&]*of=/dev/",             # dd onto a device
+    r"\brm\s+[^;|&]*-[a-z]*r",
+    r"\bmkfs\b",
+    r"\bdd\b[^;|&]*of=/dev/",
     r"\bwipefs\b",
     r"\bshutdown\b", r"\breboot\b", r"\bhalt\b", r"\bpoweroff\b",
-    r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;",  # fork bomb
-    r"\bchmod\s+-R\s+777\s+/",            # nuke permissions from root
+    r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;",
+    r"\bchmod\s+-R\s+777\s+/",
     r"\bchown\s+-R[^;|&]*/\s",
-    r">\s*/dev/sd[a-z]",                  # write straight to disk
-    r"\bmv\s+/\s",                        # move the root filesystem
+    r">\s*/dev/sd[a-z]",
+    r"\bmv\s+/\s",
 ]
 
 READ_PATTERNS = [
@@ -54,7 +73,7 @@ READ_PATTERNS = [
     r"whoami|pwd|echo|stat|file|wc|sort|uniq|cut|awk|sed|date|env|"
     r"printenv|id|groups|ps|free|uname|hostname|which|test|\[|true|false|"
     r"printf|basename|dirname|realpath|readlink|md5sum|sha256sum|"
-    r"systemctl\s+status|journalctl|curl\s+.*-o\s+/dev/null|"
+    r"systemctl\s+status|journalctl|"
     r"git\s+(status|log|diff|show|branch|remote|fetch))\b",
 ]
 
@@ -75,7 +94,6 @@ SERVICE_PATTERNS = [
 
 
 def classify(command):
-    """Return the command class string for a raw SSH command line."""
     if not command or not command.strip():
         return "empty"
     for pat in DESTRUCTIVE_PATTERNS:
@@ -98,8 +116,20 @@ def classify(command):
     return "unclassified"
 
 
+# Command class -> UCII operation string (what Brad grants).
+CLASS_TO_OPERATION = {
+    "read": "ssh.exec:read",
+    "git": "ssh.exec:git",
+    "file-op": "ssh.exec:file-op",
+    "service": "ssh.exec:service",
+    "destructive": "ssh.exec:destructive",
+    "unclassified": "ssh.exec:unclassified",
+    "empty": "ssh.exec:empty",
+}
+
+
 # ---------------------------------------------------------------------------
-# Policy + audit
+# UCII authority check (primary)
 # ---------------------------------------------------------------------------
 
 def load_json(path, default):
@@ -110,93 +140,121 @@ def load_json(path, default):
         return default
 
 
-def audit(entry):
-    with open(AUDIT_PATH, "a") as f:
-        f.write(json.dumps(entry) + "\n")
-
-
-def agent_name():
-    # The key comment (3rd field of authorized_keys line) identifies the key.
-    # sshd exposes it only indirectly; we map by which key file was used via
-    # SSH_USER_AUTH / key fingerprint when available, else fall back to the
-    # single configured agent in policy.json.
-    return os.environ.get("UCII_AGENT", "rocky")
-
-
-def decide(policy, agent, command, cmd_class):
+def ucii_check(command, cmd_class):
     """
-    Returns (allowed: bool, reason: str).
-    Rule evaluation order:
-      1. Explicit time-boxed grants (granted by the owner in chat) win.
-      2. Per-agent entitlement rules.
-      3. Default: deny (fail closed).
+    Ask the UCII server. Returns (allowed, reason) or None when the
+    gate has no UCII credential yet / the server is unreachable.
     """
+    cred = load_json(CREDENTIAL_PATH, {})
+    identity_id = cred.get("identity_id")
+    fingerprint = cred.get("credential_fingerprint")
+    secret_b64 = cred.get("private_key_b64")
+    if not (identity_id and fingerprint and secret_b64):
+        return None  # not wired up yet
+
+    try:
+        import oqs
+    except ImportError:
+        return None  # oqs missing; fall back
+
+    operation = CLASS_TO_OPERATION.get(cmd_class, "ssh.exec:unclassified")
+    # Fresh signed message: operation + timestamp + command hash, so every
+    # check is bound to this exact moment and command (replay-resistant).
+    import hashlib
+    message = "|".join([
+        "ucii-gate-check-v1",
+        identity_id,
+        operation,
+        utcnow(),
+        hashlib.sha256(command.encode()).hexdigest()[:16],
+    ])
+    try:
+        sig = oqs.Signature("ML-DSA-65", base64.b64decode(secret_b64))
+        signature = base64.b64encode(sig.sign(message.encode())).decode()
+    except Exception as e:
+        return None  # signing failed; fall back, don't fail open blindly
+
+    payload = {
+        "identity_id": identity_id,
+        "credential_fingerprint": fingerprint,
+        "operation": operation,
+        "message": message,
+        "signature": signature,
+    }
+    try:
+        req = urllib.request.Request(
+            UCII_SERVER.rstrip("/") + "/v1/authorization/delegated/check",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode())
+    except Exception:
+        return None  # server unreachable; fall back
+
+    if result.get("authorized"):
+        return True, "UCII delegated authority (%s)" % result.get(
+            "authority_id", "grant")
+    return False, "UCII denied: %s" % result.get(
+        "authority_state", "not authorized")
+
+
+# ---------------------------------------------------------------------------
+# Local policy fallback (owner only, v1 behavior)
+# ---------------------------------------------------------------------------
+
+def local_decide(policy, agent, command, cmd_class):
     now = utcnow()
     agents = policy.get("agents", {})
     info = agents.get(agent, {})
     entitlement = info.get("entitlement", "none")
 
-    # 1. Explicit grants
     for g in policy.get("grants", []):
         if g.get("agent") != agent:
             continue
         if g.get("expires_at", "") < now:
             continue
         if re.search(g.get("command_pattern", r"(?!)"), command):
-            return True, "explicit grant %s" % g.get("id", "?")
+            return True, "explicit grant %s (local fallback)" % g.get("id", "?")
 
-    # 2. Entitlement rules
     if entitlement == "owner":
-        # The owner's own agent: everything except destructive is allowed.
-        # Destructive needs an explicit grant (rule 1) — "no need to pay
-        # myself, but still no silent foot-guns."
         if cmd_class == "destructive":
-            return False, "destructive requires explicit owner grant"
-        return True, "owner entitlement"
+            return False, ("destructive requires explicit owner grant "
+                           "(local fallback)")
+        return True, "owner entitlement (local fallback)"
 
-    if entitlement in ("subscriber-monthly", "subscriber-yearly"):
-        exp = info.get("expires_at", "")
-        if exp and exp < now:
-            return False, "subscription expired"
-        scopes = info.get("scopes", {})
-        allowed_classes = scopes.get("classes", ["read"])
-        if cmd_class in allowed_classes:
-            # Optional path/repo scoping
-            if cmd_class == "git" and scopes.get("repos"):
-                ok = any(
-                    re.search(r"(?:^|\s)" + re.escape(rp).replace(r"\*", ".*"),
-                              command)
-                    for rp in scopes["repos"]
-                )
-                return ok, "subscriber git scope" if ok else "repo out of scope"
-            return True, "subscriber entitlement"
-        return False, "class '%s' not in subscription" % cmd_class
+    return False, "no UCII credential and no local entitlement"
 
-    if entitlement == "x402":
-        # Pay-per-use: the caller must present a verified x402 payment
-        # receipt for this command class. Verification lives in x402_verify.py
-        # (packages/x402) so the gate stays facilitator-agnostic.
-        try:
-            sys.path.insert(0, os.path.join(GATE_DIR, "packages", "x402"))
-            from x402_verify import verify_payment  # noqa
-            receipt = os.environ.get("UCII_X402_RECEIPT", "")
-            ok, detail = verify_payment(receipt, cmd_class, policy)
-            return ok, "x402: %s" % detail
-        except Exception as e:  # never fail open on verifier errors
-            return False, "x402 verifier error: %s" % e
 
-    # 3. Fail closed
-    return False, "no entitlement"
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def audit(entry):
+    with open(AUDIT_PATH, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
+def agent_name():
+    return os.environ.get("UCII_AGENT", "rocky")
 
 
 def main():
     command = os.environ.get("SSH_ORIGINAL_COMMAND", "")
-    policy = load_json(POLICY_PATH, {})
-    identity = load_json(IDENTITY_PATH, {})
     agent = agent_name()
     cmd_class = classify(command)
+    identity = load_json(IDENTITY_PATH, {})
 
-    allowed, reason = decide(policy, agent, command, cmd_class)
+    # Primary: UCII server. Fallback: local policy (owner only).
+    result = ucii_check(command, cmd_class)
+    if result is None:
+        policy = load_json(POLICY_PATH, {})
+        allowed, reason = local_decide(policy, agent, command, cmd_class)
+        via = "local-policy"
+    else:
+        allowed, reason = result
+        via = "ucii-server"
 
     audit({
         "ts": utcnow(),
@@ -204,21 +262,19 @@ def main():
         "identity_id": identity.get("id"),
         "command": command[:500],
         "class": cmd_class,
+        "via": via,
         "decision": "allow" if allowed else "deny",
         "reason": reason,
     })
 
     if not allowed:
-        sys.stderr.write(
-            "UCII gate: DENIED (%s). Ask the owner for a grant.\n" % reason
-        )
+        sys.stderr.write("UCII gate: DENIED (%s).\n" % reason)
         sys.exit(1)
 
     if not command.strip():
         sys.stderr.write("UCII gate: interactive shells are disabled.\n")
         sys.exit(1)
 
-    # Execute the allowed command, replacing this process.
     os.execvp("/bin/bash", ["/bin/bash", "-c", command])
 
 
