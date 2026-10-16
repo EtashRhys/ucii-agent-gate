@@ -87,7 +87,7 @@ No terminal required on your end, ever.
 |---|---|---|
 | **Monthly** | **$49 CAD/month** | Full protection, cancel anytime. |
 | **Yearly** | **$490 CAD/year** | Two months free. Same protection, committed. |
-| **Pay-per-use** | x402 micropayments (USDC) | Prefer per-command billing? ~$12/mo light use, breaks even with flat rate around 60 commands/day. See `packages/x402/`. |
+| **Pay-per-use** | x402 micropayments | Prefer per-command billing? See `packages/x402/`. USDC per command class. |
 
 Flat-rate plans are paid by Interac e-Transfer (Canada) — see
 `packages/entitlement/` for payment details. No payment processor cut,
@@ -138,6 +138,61 @@ agent runs from that point is classified, authorized, and logged.
 
 Questions? The authority lifecycle (what your $49 actually buys) is
 explained in `packages/entitlement/`.
+
+## Two ways to be protected
+
+Same price ($49/month) either way. You pick the model when you sign
+up; the operator mints the authority to match.
+
+**Option 1: Restricted (the default).** You tell the operator what your
+agent needs to do. The operator grants a signed authority listing
+exactly those operation classes — read, git, file-op, service, or any
+combination. Every command your agent runs is checked against that
+authority. Inside it: allowed and logged. Outside it: denied and
+logged.
+
+**Option 2: Audit-only.** You want the identity, the audit trail, and
+the kill switch — but no denials slowing your agent down. The operator
+grants all non-destructive operation classes. Every command is
+allowed, every command is logged, and the operator can revoke the
+whole thing instantly.
+
+One thing is not optional, and it's not configurable by you: **you
+don't decide what's allowed.** The operator grants your agent a signed
+authority, and the gate enforces it on every command. You can't widen
+it yourself; only the operator can change it. That's the product — if
+you could rewrite your own permissions, they'd be suggestions, not
+protection. Destructive commands are never standing under either
+option: they always require a separate scoped grant ($25, 2-hour
+window, one specific command).
+
+### What this looks like in real life
+
+**Common:**
+
+- **The code reviewer.** Reads your repos, runs tests, comments on
+  PRs. Restricted: read + git. It can never modify a file or restart
+  a service.
+- **The staging deployer.** Pushes to staging, restarts staging
+  services, tails the deploy logs. Restricted: git + file-op +
+  service. Destructive denied — no dropped databases, no wiped
+  directories, even by accident.
+- **The log watcher.** Checks service health, reads logs, reports
+  anomalies. Restricted: read only. It can look at everything and
+  change nothing.
+
+**Less common but plausible:**
+
+- **The one-time migration.** You need an agent to run a single
+  database migration Saturday morning. Destructive grant: one specific
+  command, 2-hour window, $25. Then it's gone — never a standing
+  permission.
+- **The analytics reader.** Queries your production database for
+  reports. Restricted or audit-only: read. It can SELECT all day; it
+  can never UPDATE, DELETE, or DROP.
+- **The trusted insider.** Your own agent on your own infrastructure
+  doing real work. Audit-only: all non-destructive classes granted,
+  everything logged, kill switch in your pocket.
 
 ## Safety
 
