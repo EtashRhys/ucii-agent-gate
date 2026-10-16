@@ -6,9 +6,15 @@ command your agent tries to run is classified, checked against your
 **UCII server** (identity + delegated authority, cryptographically
 verified), logged for audit, and only then executed — or denied.
 
-Built for the "fired laptop" workflow: you chat with your AI from your
-phone, it drives your server over SSH, and UCII governs what it's
+Built for the "fired laptop" workflow: you chat with your AI in plain
+language, it drives your server over SSH, and UCII governs what it's
 allowed to do. The AI proposes. Your server decides.
+
+Not phone-specific. You talk to the agent from any device — phone,
+laptop, whatever — and the agent itself can run anywhere: a cloud VM,
+your laptop, a container. The gate lives on the *server*, so every SSH
+command goes through the UCII check no matter where the agent sits.
+No terminal required on your end, ever.
 
 ## The 3-step install
 
