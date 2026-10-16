@@ -75,6 +75,11 @@ READ_PATTERNS = [
     r"printf|basename|dirname|realpath|readlink|md5sum|sha256sum|"
     r"systemctl\s+status|journalctl|"
     r"git\s+(status|log|diff|show|branch|remote|fetch))\b",
+    r"^\s*cd\b",
+    r"^\s*git\s+(--version|--help)\b",
+    r"^\s*git\s*$",
+    r"^\s*systemctl\s+(is-active|is-enabled|is-failed|show|"
+    r"list-units|list-sockets|list-timers|cat)\b",
 ]
 
 GIT_PATTERNS = [
@@ -93,27 +98,94 @@ SERVICE_PATTERNS = [
 ]
 
 
-def classify(command):
-    if not command or not command.strip():
-        return "empty"
+# Severity order: highest risk first (for combining compound parts).
+CLASS_SEVERITY = [
+    "destructive", "unclassified", "service", "file-op", "git",
+    "read", "empty",
+]
+
+
+def split_compound(command):
+    """Split on && || ; | respecting single/double quotes."""
+    parts, current = [], []
+    in_single, in_double = False, False
+    i, n = 0, len(command)
+    while i < n:
+        c = command[i]
+        if c == "'" and not in_double:
+            in_single = not in_single
+            current.append(c)
+        elif c == '"' and not in_single:
+            in_double = not in_double
+            current.append(c)
+        elif not in_single and not in_double:
+            two = command[i:i + 2]
+            if two in ("&&", "||"):
+                parts.append("".join(current).strip())
+                current = []
+                i += 2
+                continue
+            elif c in (";", "|"):
+                parts.append("".join(current).strip())
+                current = []
+            else:
+                current.append(c)
+        else:
+            current.append(c)
+        i += 1
+    parts.append("".join(current).strip())
+    return [p for p in parts if p]
+
+
+def has_output_redirect(part):
+    """True if the part redirects stdout to a file (a write)."""
+    cleaned = re.sub(r"2\s*>", "", part)
+    cleaned = re.sub(r"&\s*>", "", cleaned)
+    return bool(re.search(r">", cleaned))
+
+
+def classify_single(part):
+    """Classify one shell-simple command (no compounds)."""
     for pat in DESTRUCTIVE_PATTERNS:
-        if re.search(pat, command):
+        if re.search(pat, part):
             return "destructive"
+    # Output redirect to a file is a write, even on read verbs (echo > f).
+    if has_output_redirect(part):
+        return "file-op"
     for pat in READ_PATTERNS:
-        if re.search(pat, command):
+        if re.search(pat, part):
             return "read"
     for pat in GIT_PATTERNS:
-        if re.search(pat, command):
+        if re.search(pat, part):
             return "git"
     for pat in FILE_OP_PATTERNS:
-        if re.search(pat, command):
+        if re.search(pat, part):
             return "file-op"
     for pat in SERVICE_PATTERNS:
-        if re.search(pat, command):
+        if re.search(pat, part):
             return "service"
-    if command.strip().startswith("scp "):
+    if part.strip().startswith("scp "):
         return "file-op"
     return "unclassified"
+
+
+def classify(command):
+    """Classify a full command; compounds take the strictest part class."""
+    if not command or not command.strip():
+        return "empty"
+    classes = [classify_single(p) for p in split_compound(command)]
+    for c in CLASS_SEVERITY:
+        if c in classes:
+            return c
+    return "unclassified"
+
+
+def classify_parts(command):
+    """Return [(part, class)] for compound commands (for per-part checks)."""
+    parts = split_compound(command)
+    if not parts:
+        return [("", "empty")]
+    return [(p, classify_single(p)) for p in parts]
 
 
 # Command class -> UCII operation string (what Brad grants).
@@ -240,21 +312,48 @@ def agent_name():
     return os.environ.get("UCII_AGENT", "rocky")
 
 
+def decide(command, agent):
+    """Authorize a (possibly compound) command.
+
+    Every part of a compound command must be authorized. Returns
+    (allowed, reason, via, cmd_class) where cmd_class is the strictest
+    part class for the audit log.
+    """
+    parts = classify_parts(command)
+    cmd_class = classify(command)
+    if cmd_class == "destructive":
+        return (False, "destructive requires explicit owner grant",
+                "gate", cmd_class)
+    if cmd_class == "empty":
+        return False, "empty command", "gate", cmd_class
+
+    distinct = []
+    for _, c in parts:
+        if c not in distinct and c not in ("empty",):
+            distinct.append(c)
+
+    via, reasons = "ucii-server", []
+    for cls in distinct:
+        result = ucii_check(command, cls)
+        if result is None:
+            policy = load_json(POLICY_PATH, {})
+            allowed, reason = local_decide(policy, agent, command, cls)
+            via = "local-policy"
+        else:
+            allowed, reason = result
+        if not allowed:
+            return False, reason, via, cmd_class
+        reasons.append("%s: %s" % (cls, reason))
+    return True, "; ".join(reasons), via, cmd_class
+
+
 def main():
     command = os.environ.get("SSH_ORIGINAL_COMMAND", "")
     agent = agent_name()
-    cmd_class = classify(command)
     identity = load_json(IDENTITY_PATH, {})
 
     # Primary: UCII server. Fallback: local policy (owner only).
-    result = ucii_check(command, cmd_class)
-    if result is None:
-        policy = load_json(POLICY_PATH, {})
-        allowed, reason = local_decide(policy, agent, command, cmd_class)
-        via = "local-policy"
-    else:
-        allowed, reason = result
-        via = "ucii-server"
+    allowed, reason, via, cmd_class = decide(command, agent)
 
     audit({
         "ts": utcnow(),
