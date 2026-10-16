@@ -73,6 +73,12 @@ It walks you through keypair generation, identity provisioning,
 lifecycle-service build, delegated grant, and verification — pausing
 for your approval at each consequential step. Six steps, one command.
 
+**Highly recommended:** have an AI agent go through this repo with you.
+The wrapping involves server work, approval decisions, and a few gotchas
+that are easier spotted in pairs — an agent reading these docs alongside
+you makes the whole thing dramatically easier than going solo. (That is
+how the first agent was wrapped.)
+
 ## Packages: how the agent pays (or doesn't)
 
 | Package | For | How |
