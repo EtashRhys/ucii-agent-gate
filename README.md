@@ -6,6 +6,13 @@ against your UCII server (identity + delegated authority,
 cryptographically verified), logged for audit, and only then executed —
 or denied.
 
+> [!IMPORTANT]
+> **Start with your AI agent.** Have it read this repo with you before
+> you touch anything. The install involves server work and a few gotchas
+> that are easier spotted in pairs — an agent walking these docs alongside
+> you makes the whole thing dramatically easier than going solo. (That is
+> how the first agent was wrapped.)
+
 ## Why you need this
 
 **The agent that deleted production.** 2023 — an AI coding agent wiped a
@@ -95,11 +102,18 @@ software. If it does — keep reading.
 Getting your agent, device, or robot under UCII protection takes four
 steps. You do two, the operator does two.
 
-**1. You: install the gate.** Clone this repo and run the installer on
-the server your agent connects to:
+**1. You: install the gate.** Run this on the server your agent
+connects to:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/EtashRhys/ucii-agent-gate/main/install.sh | bash
+```
+
+Then append the one `authorized_keys` line it prints. Done. Test it:
+
+```bash
+ssh -i ~/.ssh/ucii_agent_gate user@server 'uptime'        # allowed
+ssh -i ~/.ssh/ucii_agent_gate user@server 'rm -rf /tmp/x' # denied + logged
 ```
 
 This puts `gate.py` on your server. It doesn't do anything yet — it's
@@ -119,48 +133,11 @@ assumed.
 **4. Operator: ships your package.** You'll get a reply email with
 everything your gate needs: your agent's identity ID, its signing
 credential, the UCII server endpoint, and the authority details. Drop
-those into your gate config, add the one `authorized_keys` line, and
-you're protected. Every command your agent runs from that point is
-classified, authorized, and logged.
+those into your gate config and you're protected. Every command your
+agent runs from that point is classified, authorized, and logged.
 
 Questions? The authority lifecycle (what your $49 actually buys) is
 explained in `packages/entitlement/`.
-
-## Wrapping an agent (joining the UCII family)
-
-> [!IMPORTANT]
-> **Start with your AI agent.** Have it read this repo with you before
-> you touch anything. The install and wrapping involve server work,
-> approval decisions, and a few gotchas that are easier spotted in
-> pairs — an agent walking these docs alongside you makes the whole
-> thing dramatically easier than going solo. (That is how the first
-> agent was wrapped.)
-
-The gate is half the story. Before it can ask your UCII server, the
-agent needs a real UCII identity — that's called **wrapping**. See
-**[ONBOARDING.md](ONBOARDING.md)** for the full guide, or run the
-interactive wrapper on your UCII server:
-
-```bash
-sudo bash scripts/wrap-agent.sh
-```
-
-Six steps, one command, pausing for your approval where a human
-decision is needed.
-
-## The 3-step install
-
-```bash
-curl -sSL https://raw.githubusercontent.com/EtashRhys/ucii-agent-gate/main/install.sh | bash
-```
-
-Then append the one `authorized_keys` line it prints to your server.
-Done. Test:
-
-```bash
-ssh -i ~/.ssh/ucii_agent_gate user@server 'uptime'        # allowed
-ssh -i ~/.ssh/ucii_agent_gate user@server 'rm -rf /tmp/x' # denied + logged
-```
 
 ## Safety
 
@@ -187,3 +164,21 @@ ssh -i ~/.ssh/ucii_agent_gate user@server 'rm -rf /tmp/x' # denied + logged
 - `scripts/grant_authority.py` — delegated authority grant
 - `scripts/verify_wrapping.py` — end-to-end wrapping verification
 - `scripts/register_identity.py` — public x402 AI_AGENT registration
+
+## For operators: wrapping an agent
+
+This section is for the UCII server operator — the person provisioning
+agents. If you're a customer, you can stop reading here; the operator
+handles all of this for you after payment.
+
+The gate is half the story. Before it can ask your UCII server, the
+agent needs a real UCII identity — that's called **wrapping**. See
+**[ONBOARDING.md](ONBOARDING.md)** for the full guide, or run the
+interactive wrapper on your UCII server:
+
+```bash
+sudo bash scripts/wrap-agent.sh
+```
+
+Six steps, one command, pausing for your approval where a human
+decision is needed.
