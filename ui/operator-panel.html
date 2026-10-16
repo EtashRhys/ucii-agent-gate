@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UCII Admin — Authorities</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: .9rem; }
+  th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #ddd; }
+  th { background: #f5f5f5; }
+  code { font-size: .82rem; word-break: break-all; }
+  button { padding: .35rem .8rem; font-size: .85rem; border-radius: 6px; border: 1px solid #999; background: #f5f5f5; cursor: pointer; }
+  button.danger { background: #b00020; color: #fff; border-color: #b00020; }
+  button:disabled { opacity: .5; cursor: default; }
+  input[type=text] { padding: .5rem; font-size: .95rem; width: 320px; }
+  .status.active { color: #0a7a2f; font-weight: bold; }
+  .status.revoked { color: #b00020; font-weight: bold; }
+  .msg { padding: .6rem; border-radius: 6px; margin: .5rem 0; display: none; }
+  .msg.err { display: block; background: #fde; border: 1px solid #b00020; }
+  .msg.ok { display: block; background: #dfd; border: 1px solid #0a7a2f; }
+  .msg.info { display: block; background: #eef4ff; border: 1px solid #99c; }
+  .fine { font-size: .85rem; color: #555; }
+</style>
+</head>
+<body>
+
+<h1>UCII Admin — Authorities</h1>
+<p class="fine">Every delegated authority on this server. Revoke is immediate, logged, irreversible — restoration is a new grant. You don't need this page for routine customer actions; customers manage themselves. This is the fire axe: abuse, non-payment, compromise.</p>
+
+<div>
+  <button class="primary" onclick="loadAll()">Refresh list</button>
+  <span class="fine">or revoke one ID directly:</span>
+  <input type="text" id="oneId" placeholder="authority ID" autocomplete="off">
+  <button class="danger" onclick="revokeOne()">Revoke</button>
+</div>
+<div class="msg" id="msg"></div>
+
+<table id="tbl" style="display:none">
+  <thead><tr>
+    <th>Agent / customer</th><th>Authority</th><th>Operations</th><th>Granted</th><th>Last seen</th><th>Status</th><th></th>
+  </tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+
+<script>
+// ---- config ----
+// Serve this page at an unguessable path (secret-path token generated at install).
+// Same-origin with the API: no CORS issues.
+const API_BASE = "https://ucii.sportgen-ai.com";
+
+function msg(text, kind) {
+  const el = document.getElementById("msg");
+  el.textContent = text;
+  el.className = "msg " + kind;
+}
+function api(path, method, body) {
+  return fetch(API_BASE + path, {
+    method: method || "GET",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  }).then(async (r) => {
+    if (r.status === 404) throw new Error("not-found");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  });
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function loadAll() {
+  msg("Loading…", "info");
+  try {
+    // GET /v1/authorization/delegated/authorities — NEEDS ADDING (see API-CONTRACT.md).
+    // Operator-authenticated server side; never exposed without the secret path.
+    const list = await api("/v1/authorization/delegated/authorities");
+    const tb = document.getElementById("rows");
+    tb.innerHTML = "";
+    for (const a of list) {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td>" + esc(a.agent_name || "—") + "<br><span class='fine'>" + esc(a.customer || "") + "</span></td>" +
+        "<td><code>" + esc(a.authority_id) + "</code><br><span class='fine'>" + esc(a.identity_id) + "</span></td>" +
+        "<td><span class='fine'>" + esc((a.allowed_operations || []).join(", ")) + "</span></td>" +
+        "<td><span class='fine'>" + esc(a.granted_at || "—") + "</span></td>" +
+        "<td><span class='fine'>" + esc(a.last_seen || "—") + "</span></td>" +
+        "<td class='status " + (a.authority_state === "ACTIVE" ? "active" : "revoked") + "'>" + esc(a.authority_state) + "</td>" +
+        "<td>" + (a.authority_state === "ACTIVE"
+          ? "<button class='danger' onclick='revokeId(\"" + esc(a.authority_id) + "\")'>Revoke</button>"
+          : "") + "</td>";
+      tb.appendChild(tr);
+    }
+    document.getElementById("tbl").style.display = "";
+    msg("Loaded " + list.length + " authorities.", "ok");
+  } catch (e) {
+    if (e.message === "not-found")
+      msg("The list endpoint (GET /v1/authorization/delegated/authorities) is not wired up yet — see API-CONTRACT.md. You can still revoke a single ID below.", "err");
+    else msg("Couldn't load: " + e.message, "err");
+  }
+}
+
+async function revokeId(id) {
+  if (!confirm("Revoke authority " + id + "? Immediate and irreversible.")) return;
+  msg("Revoking…", "info");
+  try {
+    // POST /v1/authorization/delegated/{authority_id}/revoke — EXISTS (operator lifecycle auth, server side).
+    await api("/v1/authorization/delegated/" + encodeURIComponent(id) + "/revoke",
+      "POST", { reason: "operator revoke" });
+    msg("Revoked: " + id, "ok");
+    loadAll();
+  } catch (e) {
+    msg("Couldn't revoke: " + e.message, "err");
+  }
+}
+
+function revokeOne() {
+  const id = document.getElementById("oneId").value.trim();
+  if (!id) { msg("Paste an authority ID first.", "err"); return; }
+  revokeId(id);
+}
+</script>
+</body>
+</html>

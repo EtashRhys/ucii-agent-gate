@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Control Panel</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+  .card h2 { font-size: 1.05rem; margin: 0 0 .5rem; }
+  label { display: block; margin: .4rem 0; }
+  input[type=text] { width: 100%; padding: .5rem; font-size: 1rem; box-sizing: border-box; }
+  button { padding: .6rem 1.2rem; font-size: 1rem; border-radius: 6px; border: 1px solid #999; background: #f5f5f5; cursor: pointer; margin-top: .5rem; }
+  button.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  button.danger { background: #b00020; color: #fff; border-color: #b00020; }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { font-weight: bold; }
+  .status.active { color: #0a7a2f; }
+  .status.revoked { color: #b00020; }
+  .ops span { display: inline-block; background: #eef; border-radius: 4px; padding: .15rem .5rem; margin: .15rem; font-size: .9rem; }
+  .msg { padding: .6rem; border-radius: 6px; margin: .5rem 0; display: none; }
+  .msg.err { display: block; background: #fde; border: 1px solid #b00020; }
+  .msg.ok { display: block; background: #dfd; border: 1px solid #0a7a2f; }
+  .msg.info { display: block; background: #eef4ff; border: 1px solid #99c; }
+  .fine { font-size: .85rem; color: #555; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<h1>Agent Control Panel</h1>
+<p class="fine">Manage your gated agent's authority. Your agent's identity never changes — only its grants do.</p>
+
+<div class="card">
+  <h2>1. Your authority</h2>
+  <label>Authority ID (from your credentials email)
+    <input type="text" id="authId" placeholder="paste authority ID" autocomplete="off">
+  </label>
+  <button class="primary" id="loadBtn" onclick="loadAuthority()">Load</button>
+  <div class="msg" id="loadMsg"></div>
+</div>
+
+<div class="card hidden" id="statusCard">
+  <h2>2. Status</h2>
+  <div id="statusBody"></div>
+</div>
+
+<div class="card hidden" id="replaceCard">
+  <h2>3. Replace grant</h2>
+  <p class="fine">Pick the operations for the new grant. The old grant is revoked and a new one begins — same identity.</p>
+  <label><input type="checkbox" class="op" value="ssh.exec:read" checked> read — run read-only commands</label>
+  <label><input type="checkbox" class="op" value="ssh.exec:git" checked> git — clone, pull, push</label>
+  <label><input type="checkbox" class="op" value="ssh.exec:file-op" checked> file-op — create, move, edit files</label>
+  <label><input type="checkbox" class="op" value="ssh.exec:service" checked> service — restart services</label>
+  <p class="fine">Destructive is never a standing grant. Use the scoped window below.</p>
+  <button class="primary" onclick="replaceGrant()">Replace grant</button>
+  <div class="msg" id="replaceMsg"></div>
+</div>
+
+<div class="card hidden" id="killCard">
+  <h2>4. Kill switch</h2>
+  <p class="fine">Revoke this grant immediately. Your agent stops on its next check. If you kill it, you kill it — mid-month kills are not refunded.</p>
+  <button class="danger" id="killBtn" onclick="killGrant()">Revoke this grant</button>
+  <div class="msg" id="killMsg"></div>
+</div>
+
+<div class="card hidden" id="destrCard">
+  <h2>5. Destructive window — $25</h2>
+  <p class="fine">One scoped grant: 2-hour window, one command class, then it expires automatically. Destructive is never standing.</p>
+  <button onclick="buyDestructive()">Buy destructive window — $25</button>
+  <div class="msg" id="destrMsg"></div>
+</div>
+
+<script>
+// ---- config ----
+const API_BASE = "https://ucii.sportgen-ai.com"; // UCII server; serve this page same-origin in production
+
+// ---- helpers ----
+function msg(id, text, kind) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = "msg " + kind;
+}
+function clearMsg(id) {
+  const el = document.getElementById(id);
+  el.className = "msg"; el.textContent = "";
+}
+function api(path, method, body) {
+  return fetch(API_BASE + path, {
+    method: method || "GET",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  }).then(async (r) => {
+    if (r.status === 404) throw new Error("not-found");
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      throw new Error("HTTP " + r.status + (t ? ": " + t.slice(0, 120) : ""));
+    }
+    return r.json();
+  });
+}
+function needServer(what) {
+  return "This needs the server endpoint (" + what + ") — see API-CONTRACT.md. It is not wired up yet.";
+}
+let current = null; // { authority_id, identity_id, ... }
+
+// ---- 1+2. load + status ----
+async function loadAuthority() {
+  clearMsg("loadMsg");
+  const id = document.getElementById("authId").value.trim();
+  if (!id) { msg("loadMsg", "Paste your authority ID first.", "err"); return; }
+  msg("loadMsg", "Loading…", "info");
+  try {
+    // GET /v1/authorization/delegated/{authority_id} — NEEDS ADDING (see API-CONTRACT.md)
+    const a = await api("/v1/authorization/delegated/" + encodeURIComponent(id));
+    current = { authority_id: id, identity_id: a.identity_id };
+    document.getElementById("statusBody").innerHTML =
+      '<div>Agent identity: <code>' + esc(a.identity_id) + '</code></div>' +
+      '<div>Status: <span class="status ' + (a.authority_state === "ACTIVE" ? "active" : "revoked") + '">' + esc(a.authority_state) + '</span></div>' +
+      '<div class="ops">Granted: ' + (a.allowed_operations || []).map((o) => "<span>" + esc(o) + "</span>").join("") + '</div>' +
+      '<div class="fine">Granted: ' + esc(a.granted_at || "—") + (a.last_seen ? ' · Last seen: ' + esc(a.last_seen) : '') + '</div>';
+    for (const c of ["statusCard", "replaceCard", "killCard", "destrCard"])
+      document.getElementById(c).classList.remove("hidden");
+    // pre-check the boxes to match the current grant
+    document.querySelectorAll(".op").forEach((cb) => {
+      cb.checked = (a.allowed_operations || []).includes(cb.value);
+    });
+    msg("loadMsg", "Loaded.", "ok");
+  } catch (e) {
+    if (e.message === "not-found") msg("loadMsg", needServer("GET /v1/authorization/delegated/{authority_id}"), "err");
+    else msg("loadMsg", "Couldn't load: " + e.message, "err");
+  }
+}
+
+// ---- 3. replace ----
+async function replaceGrant() {
+  clearMsg("replaceMsg");
+  const ops = [...document.querySelectorAll(".op:checked")].map((cb) => cb.value);
+  if (!ops.length) { msg("replaceMsg", "Pick at least one operation.", "err"); return; }
+  if (!confirm("Replace this grant? The old grant is revoked and a new one begins. Same identity.")) return;
+  msg("replaceMsg", "Working…", "info");
+  try {
+    // POST /v1/authorization/delegated/{authority_id}/replace — NEEDS ADDING (see API-CONTRACT.md)
+    const r = await api("/v1/authorization/delegated/" + encodeURIComponent(current.authority_id) + "/replace",
+      "POST", { allowed_operations: ops });
+    document.getElementById("authId").value = r.authority_id;
+    msg("replaceMsg", "New grant active: " + r.authority_id + ". Update your credentials email with the new ID.", "ok");
+    loadAuthority();
+  } catch (e) {
+    if (e.message === "not-found") msg("replaceMsg", needServer("POST /v1/authorization/delegated/{authority_id}/replace"), "err");
+    else msg("replaceMsg", "Couldn't replace: " + e.message, "err");
+  }
+}
+
+// ---- 4. kill ----
+async function killGrant() {
+  clearMsg("killMsg");
+  if (!confirm("Revoke this grant? Your agent stops on its next check. This can't be undone — a new grant starts fresh.")) return;
+  msg("killMsg", "Working…", "info");
+  try {
+    // POST /v1/authorization/delegated/{authority_id}/customer-revoke — NEEDS ADDING (see API-CONTRACT.md)
+    await api("/v1/authorization/delegated/" + encodeURIComponent(current.authority_id) + "/customer-revoke",
+      "POST", { reason: "customer kill switch" });
+    msg("killMsg", "Grant revoked. Your agent is stopped.", "ok");
+    loadAuthority();
+  } catch (e) {
+    if (e.message === "not-found") msg("killMsg", needServer("POST /v1/authorization/delegated/{authority_id}/customer-revoke"), "err");
+    else msg("killMsg", "Couldn't revoke: " + e.message, "err");
+  }
+}
+
+// ---- 5. destructive window ----
+async function buyDestructive() {
+  clearMsg("destrMsg");
+  msg("destrMsg", "Destructive windows are purchased through the UCII Admin after you confirm here — " +
+    "this self-serve checkout is not wired up yet. The scoped grant ($25, 2 hours, one command) is the only way destructive is ever allowed.", "info");
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+</script>
+</body>
+</html>
