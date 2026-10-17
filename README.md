@@ -97,7 +97,11 @@ no integration to build: you send the transfer, the owner provisions
 your agent.
 
 If none of this sounds worth $49/month to you, this isn't your
-software. If it does — keep reading.
+software. If it does — **[buy UCII](https://ucii.sportgen-ai.com/buy/)**.
+
+Full package comparison and purchase flow at
+[ucii.sportgen-ai.com/buy](https://ucii.sportgen-ai.com/buy/) — keep reading
+for the technical details.
 
 ## How to get protected
 
