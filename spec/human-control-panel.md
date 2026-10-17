@@ -43,7 +43,7 @@ Underneath, this is two existing calls back to back:
 
 **Kill.** Revoke with a reason, one confirm, immediate. The agent stops on its next check. If they kill it, they kill it.
 
-**Destructive window.** Destructive is never a standing grant — that's a policy rail, not a UI choice. The panel offers the existing scoped flow: $25, 2-hour window, one command. Self-serve through the panel; the UCII Admin doesn't hand-issue these.
+**Hall pass.** A hall pass is never a standing grant — that's a policy rail, not a UI choice. The panel offers the existing scoped flow: $25, 2-hour hall pass, one specific command. The customer requests it in the panel; the UCII Admin approves after verifying payment.
 
 ## Page 2: Operator page
 

@@ -24,6 +24,7 @@
   .msg.ok { display: block; background: #dfd; border: 1px solid #0a7a2f; }
   .msg.info { display: block; background: #eef4ff; border: 1px solid #99c; }
   .fine { font-size: .85rem; color: #555; }
+  .warn { font-size: .9rem; color: #7a3c00; background: #fff4e0; border: 1px solid #d97c00; border-radius: 6px; padding: .6rem; margin: .5rem 0; }
   .hidden { display: none; }
 </style>
 </head>
@@ -69,9 +70,10 @@
 </div>
 
 <div class="card hidden" id="destrCard">
-  <h2>5. Destructive window — $25</h2>
-  <p class="fine">One scoped grant: 2-hour window, one command class, then it expires automatically. Destructive is never standing.</p>
-  <button onclick="buyDestructive()">Buy destructive window — $25</button>
+  <h2>5. Hall pass — $25</h2>
+  <p class="fine">One specific dangerous command, approved by the UCII Admin, live for 2 hours, then it expires automatically. Hall passes are never standing.</p>
+  <p class="warn">⚠️ A hall pass lets your agent run one command that can permanently delete or destroy data. Double-check the exact command before you request it — this cannot be undone.</p>
+  <button onclick="requestHallPass()">Request hall pass — $25</button>
   <div class="msg" id="destrMsg"></div>
 </div>
 
@@ -183,11 +185,11 @@ async function killGrant() {
   }
 }
 
-// ---- 5. destructive window ----
-async function buyDestructive() {
+// ---- 5. hall pass ----
+async function requestHallPass() {
   clearMsg("destrMsg");
-  msg("destrMsg", "Destructive windows are purchased through the UCII Admin after you confirm here — " +
-    "this self-serve checkout is not wired up yet. The scoped grant ($25, 2 hours, one command) is the only way destructive is ever allowed.", "info");
+  msg("destrMsg", "Hall passes are approved by the UCII Admin after you request here — " +
+    "this request flow is not wired up yet. A hall pass ($25, 2 hours, one specific command) is the only way to authorize a dangerous command.", "info");
 }
 
 function esc(s) {

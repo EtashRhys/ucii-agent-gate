@@ -26,7 +26,7 @@ enough for kill/replace — a compromised agent holding it could widen itself.
 
 Blast radius of a leaked control secret: someone can stop or reconfigure
 *your own* agent within the policy rails. They can't widen beyond the rails,
-can't touch anyone else's agent, can't grant destructive-standing.
+can't touch anyone else's agent, can't grant a standing hall pass.
 
 ## Customer panel (`customer-panel.html`)
 
@@ -35,7 +35,7 @@ can't touch anyone else's agent, can't grant destructive-standing.
 | 1 | GET | `/v1/authorization/delegated/{authority_id}` | Authority status: state, ops, granted_at, last_seen, identity_id | NEEDS ADDING |
 | 2 | POST | `/v1/authorization/delegated/{authority_id}/replace` | Revoke old + grant new atomically. Control-secret authed. Body: `{allowed_operations: [...]}`. Returns new `authority_id`. Identity unchanged. Server enforces policy rails. | NEEDS ADDING |
 | 3 | POST | `/v1/authorization/delegated/{authority_id}/customer-revoke` | Customer kill switch. Control-secret authed. Body: `{reason}`. Scoped to that one authority; no operator lifecycle auth required. | NEEDS ADDING |
-| 4 | — | destructive window checkout | $25 / 2-hour / one-command scoped grant | NEEDS ADDING (product flow, not just an endpoint) |
+| 4 | — | hall pass checkout | $25 / 2-hour / one specific command, UCII Admin approves | NEEDS ADDING (product flow, not just an endpoint) |
 
 Why new endpoints instead of the existing ones: `POST
 /v1/authorization/delegated/grant` and `POST
