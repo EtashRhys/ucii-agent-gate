@@ -9,35 +9,73 @@ a portable copy.
 Your audit log never leaves your server. UCII never sees it.
 
 Usage:
-    python3 audit_report.py [output.html]
+    python3 audit_report.py [options] [output.html]
+
+Options:
+    --from YYYY-MM-DD   Only entries on or after this date
+    --to YYYY-MM-DD     Only entries on or before this date
+    --days N            Only entries from the last N days
+
+Examples:
+    python3 audit_report.py --days 7
+    python3 audit_report.py --from 2026-10-01 --to 2026-10-15 report.html
 
 Defaults:
     input:  /opt/ucii/ucii-agent-gate/audit.log
     output: ucii-audit-report.html (in the current directory)
 """
 
+import argparse
 import json
 import sys
 import os
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from html import escape
 
 DEFAULT_LOG = "/opt/ucii/ucii-agent-gate/audit.log"
 
 
 def parse_args(argv):
-    log_path = DEFAULT_LOG
-    out_path = "ucii-audit-report.html"
-    for a in argv[1:]:
-        if a.endswith(".html"):
-            out_path = a
-        elif os.path.isfile(a):
-            log_path = a
-    return log_path, out_path
+    p = argparse.ArgumentParser(description="UCII audit report generator")
+    p.add_argument("output", nargs="?", default="ucii-audit-report.html",
+                   help="Output HTML file")
+    p.add_argument("--log", default=DEFAULT_LOG,
+                   help="Audit log path")
+    p.add_argument("--from", dest="from_date", default=None,
+                   help="Only entries on or after YYYY-MM-DD")
+    p.add_argument("--to", dest="to_date", default=None,
+                   help="Only entries on or before YYYY-MM-DD")
+    p.add_argument("--days", type=int, default=None,
+                   help="Only entries from the last N days")
+    args = p.parse_args(argv[1:])
+
+    # Resolve date filters
+    from_d = to_d = None
+    if args.days is not None:
+        to_d = date.today()
+        from_d = to_d - timedelta(days=args.days - 1)
+    if args.from_date:
+        from_d = datetime.strptime(args.from_date, "%Y-%m-%d").date()
+    if args.to_date:
+        to_d = datetime.strptime(args.to_date, "%Y-%m-%d").date()
+
+    return args.log, args.output, from_d, to_d
 
 
-def load_entries(log_path):
+def entry_date(e):
+    """Extract the date portion of an entry's timestamp."""
+    ts = e.get("ts", "")
+    try:
+        return datetime.fromisoformat(ts.replace("+00:00", "")).date()
+    except Exception:
+        try:
+            return datetime.strptime(ts[:10], "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+
+def load_entries(log_path, from_d=None, to_d=None):
     entries = []
     with open(log_path) as f:
         for line in f:
@@ -45,9 +83,18 @@ def load_entries(log_path):
             if not line:
                 continue
             try:
-                entries.append(json.loads(line))
+                e = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if from_d or to_d:
+                d = entry_date(e)
+                if d is None:
+                    continue
+                if from_d and d < from_d:
+                    continue
+                if to_d and d > to_d:
+                    continue
+            entries.append(e)
     entries.sort(key=lambda e: e.get("ts", ""))
     return entries
 
@@ -168,15 +215,18 @@ def build_html(entries, log_path):
 
 
 def main():
-    log_path, out_path = parse_args(sys.argv)
+    log_path, out_path, from_d, to_d = parse_args(sys.argv)
     if not os.path.isfile(log_path):
         print(f"Audit log not found: {log_path}", file=sys.stderr)
         sys.exit(1)
-    entries = load_entries(log_path)
+    entries = load_entries(log_path, from_d, to_d)
     html = build_html(entries, log_path)
     with open(out_path, "w") as f:
         f.write(html)
-    print(f"Report written: {out_path} ({len(entries)} entries)")
+    filt = ""
+    if from_d or to_d:
+        filt = f" ({from_d or '...'} to {to_d or '...'})"
+    print(f"Report written: {out_path} ({len(entries)} entries{filt})")
 
 
 if __name__ == "__main__":
