@@ -147,6 +147,7 @@
   </label>
   <button class="primary" id="loadBtn" onclick="loadAuthority()">Load</button>
   <div class="msg" id="loadMsg"></div>
+  <p class="fine" style="margin-top:.8rem;"><b>Why two fields?</b> Your <b>Authority ID</b> identifies which grant you're managing &mdash; your agent already knows this ID. Your <b>Control secret</b> proves you're the human owner. It's required for anything that changes your grant (replace, kill switch, hall pass). That's the whole security model: your agent can see its own ID, but it can never see your secret &mdash; so it can never change its own permissions behind your back.</p>
 </div>
 
 <div class="card hidden" id="statusCard">
