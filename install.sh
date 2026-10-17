@@ -25,6 +25,7 @@ command -v python3 >/dev/null || { echo "python3 is required."; exit 1; }
 sudo mkdir -p "$GATE_DIR"
 sudo cp "$SRC_DIR/gate.py" "$GATE_DIR/gate.py"
 sudo cp -r "$SRC_DIR/packages" "$GATE_DIR/packages" 2>/dev/null || true
+sudo cp -r "$SRC_DIR/scripts" "$GATE_DIR/scripts" 2>/dev/null || true
 sudo chmod 755 "$GATE_DIR/gate.py"
 [ -f "$GATE_DIR/policy.json" ] || sudo cp "$SRC_DIR/policy.example.json" "$GATE_DIR/policy.json"
 [ -f "$GATE_DIR/identity.json" ] || echo '{"note":"run scripts/register_identity.py to bind a UCII AI_AGENT identity"}' | sudo tee "$GATE_DIR/identity.json" >/dev/null
