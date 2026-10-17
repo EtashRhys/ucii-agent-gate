@@ -1,53 +1,167 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>UCII Admin — Authorities</title>
+<title>UCII — Admin Authorities</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
-  h1 { font-size: 1.4rem; }
+  :root {
+    --bg: #0b0e14;
+    --card: #131720;
+    --card-border: #1f2733;
+    --text: #e8edf3;
+    --text-dim: #8b94a3;
+    --accent: #00aaff;
+    --accent-hover: #33bbff;
+    --accent-dim: rgba(0, 170, 255, .12);
+    --input-bg: #0b0e14;
+    --input-border: #2a3442;
+    --danger: #ff3b5c;
+    --ok: #2fd27d;
+    --ok-dim: rgba(47, 210, 125, .1);
+    --err-bg: rgba(255, 59, 92, .1);
+    --th-bg: #161c26;
+  }
+  [data-theme="light"] {
+    --bg: #f7f9fc;
+    --card: #ffffff;
+    --card-border: #e1e6ee;
+    --text: #14181f;
+    --text-dim: #5b6472;
+    --accent: #0077cc;
+    --accent-hover: #0090f5;
+    --accent-dim: rgba(0, 119, 204, .08);
+    --input-bg: #ffffff;
+    --input-border: #c9d2de;
+    --danger: #c00f30;
+    --ok: #0a7a2f;
+    --ok-dim: rgba(10, 122, 47, .07);
+    --err-bg: rgba(192, 15, 48, .06);
+    --th-bg: #f0f3f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    max-width: 900px; margin: 0 auto; padding: 0 1rem 3rem;
+    background: var(--bg); color: var(--text);
+    transition: background .25s, color .25s;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.4rem 0 1rem;
+  }
+  .brand { display: flex; align-items: baseline; gap: .6rem; }
+  .brand .ucii {
+    font-size: 1.7rem; font-weight: 800; letter-spacing: .12em;
+    color: var(--accent);
+  }
+  .brand .sub { font-size: 1.05rem; color: var(--text-dim); font-weight: 500; }
+  #themeToggle {
+    background: var(--card); border: 1px solid var(--card-border);
+    color: var(--text); border-radius: 50%; width: 2.4rem; height: 2.4rem;
+    font-size: 1.15rem; cursor: pointer; margin: 0; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #themeToggle:hover { border-color: var(--accent); }
+  .tagline { font-size: .9rem; color: var(--text-dim); margin: 0 0 1rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 1.2rem; margin: 1rem 0;
+    transition: background .25s, border-color .25s;
+  }
+  .card h2 { font-size: 1.05rem; margin: 0 0 .6rem; color: var(--text); }
   table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: .9rem; }
-  th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #ddd; }
-  th { background: #f5f5f5; }
-  code { font-size: .82rem; word-break: break-all; }
-  button { padding: .35rem .8rem; font-size: .85rem; border-radius: 6px; border: 1px solid #999; background: #f5f5f5; cursor: pointer; }
-  button.danger { background: #b00020; color: #fff; border-color: #b00020; }
+  th, td { text-align: left; padding: .55rem; border-bottom: 1px solid var(--card-border); }
+  th { background: var(--th-bg); color: var(--text-dim); font-weight: 600; font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
+  code { font-size: .82rem; word-break: break-all; color: var(--text); }
+  button {
+    padding: .45rem .9rem; font-size: .9rem; border-radius: 8px;
+    border: 1px solid var(--input-border); background: var(--card);
+    color: var(--text); cursor: pointer; font-weight: 600;
+    transition: border-color .15s, background .15s;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
   button:disabled { opacity: .5; cursor: default; }
-  input[type=text] { padding: .5rem; font-size: .95rem; width: 320px; }
-  .status.active { color: #0a7a2f; font-weight: bold; }
-  .status.revoked { color: #b00020; font-weight: bold; }
-  .msg { padding: .6rem; border-radius: 6px; margin: .5rem 0; display: none; }
-  .msg.err { display: block; background: #fde; border: 1px solid #b00020; }
-  .msg.ok { display: block; background: #dfd; border: 1px solid #0a7a2f; }
-  .msg.info { display: block; background: #eef4ff; border: 1px solid #99c; }
-  .fine { font-size: .85rem; color: #555; }
+  input[type=text] {
+    padding: .6rem; font-size: .95rem;
+    background: var(--input-bg); color: var(--text);
+    border: 1px solid var(--input-border); border-radius: 8px; margin-top: .3rem;
+  }
+  input[type=text]:focus { outline: none; border-color: var(--accent); }
+  input[type=text]::placeholder { color: var(--text-dim); opacity: .7; }
+  .status.active { color: var(--ok); font-weight: bold; }
+  .status.revoked { color: var(--danger); font-weight: bold; }
+  .msg { padding: .65rem; border-radius: 8px; margin: .6rem 0; display: none; font-size: .92rem; }
+  .msg.err { display: block; background: var(--err-bg); border: 1px solid var(--danger); color: var(--text); }
+  .msg.ok { display: block; background: var(--ok-dim); border: 1px solid var(--ok); color: var(--text); }
+  .msg.info { display: block; background: var(--accent-dim); border: 1px solid var(--accent); color: var(--text); }
+  .fine { font-size: .85rem; color: var(--text-dim); }
+  label { display: block; margin: .5rem 0; font-size: .95rem; }
 </style>
 </head>
 <body>
 
-<h1>UCII Admin — Authorities</h1>
-<p class="fine">Every delegated authority on this server. Revoke is immediate, logged, irreversible — restoration is a new grant. You don't need this page for routine customer actions; customers manage themselves. This is the fire axe: abuse, non-payment, compromise.</p>
+<header>
+  <div class="brand">
+    <span class="ucii">UCII</span>
+    <span class="sub">Admin — Authorities</span>
+  </div>
+  <button id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark">☀️</button>
+</header>
+<p class="tagline">Every delegated authority on this server. Revoke is immediate, logged, irreversible — restoration is a new grant. You don't need this page for routine customer actions; customers manage themselves. This is the fire axe: abuse, non-payment, compromise.</p>
 
-<div>
+<div class="card">
   <label>Operator secret
-    <input type="text" id="opSecret" placeholder="paste X-Operator-Secret" autocomplete="off" style="width:420px">
+    <input type="text" id="opSecret" placeholder="paste X-Operator-Secret" autocomplete="off" style="width:100%;max-width:420px">
   </label>
-</div>
-<div style="margin-top:.5rem">
-  <button class="primary" onclick="loadAll()">Refresh list</button>
-  <span class="fine">Revoke is operator-lifecycle authed (server side) — use the API directly, not this panel.</span>
-</div>
-<div class="msg" id="msg"></div>
+  <div style="margin-top:.5rem">
+    <button class="primary" onclick="loadAll()">Refresh list</button>
+    <span class="fine">Revoke is operator-lifecycle authed (server side) — use the API directly, not this panel.</span>
+  </div>
+  <div class="msg" id="msg"></div>
 
-<table id="tbl" style="display:none">
-  <thead><tr>
-    <th>Authority</th><th>Identity</th><th>Operations</th><th>Granted by</th><th>Granted</th><th>Status</th>
-  </tr></thead>
-  <tbody id="rows"></tbody>
-</table>
+  <table id="tbl" style="display:none">
+    <thead><tr>
+      <th>Authority</th><th>Identity</th><th>Operations</th><th>Granted by</th><th>Granted</th><th>Status</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Hall-pass requests</h2>
+  <p class="fine">Pending customer hall-pass requests. Verify the $25 payment, then approve to get a one-time key (copy it into your email). Or deny with a reason.</p>
+  <div>
+    <button class="primary" onclick="loadPending()">Refresh pending</button>
+  </div>
+  <div class="msg" id="hpMsg"></div>
+  <table id="hpTbl" style="display:none">
+    <thead><tr>
+      <th>Request</th><th>Identity</th><th>Exact command</th><th>Requested</th><th></th><th></th>
+    </tr></thead>
+    <tbody id="hpRows"></tbody>
+  </table>
+</div>
 
 <script>
+// ---- theme ----
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  try { localStorage.setItem("ucii-theme", next); } catch (e) {}
+  document.getElementById("themeToggle").textContent = next === "dark" ? "☀️" : "🌙";
+}
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem("ucii-theme"); } catch (e) {}
+  const theme = saved || "dark";
+  document.documentElement.setAttribute("data-theme", theme);
+  document.getElementById("themeToggle").textContent = theme === "dark" ? "☀️" : "🌙";
+})();
+
 // ---- config ----
 // Serve this page at an unguessable path (secret-path token generated at install).
 // Same-origin with the API: no CORS issues.
@@ -103,33 +217,18 @@ async function loadAll() {
     msg("Loaded " + list.length + " authorities.", "ok");
   } catch (e) {
     if (e.message === "not-found")
-      msg("The list endpoint (GET /v1/authorization/delegated/authorities) is not wired up yet — see API-CONTRACT.md. You can still revoke a single ID below.", "err");
+      msg("The list endpoint (GET /v1/authorization/delegated/authorities) is not wired up yet — see API-CONTRACT.md.", "err");
     else msg("Couldn't load: " + e.message, "err");
   }
 }
 
-
-<h2 style="margin-top:2rem">Hall-pass requests</h2>
-<p class="fine">Pending customer hall-pass requests. Verify the $25 payment, then approve to get a one-time key (copy it into your email). Or deny with a reason.</p>
-<div>
-  <button class="primary" onclick="loadPending()">Refresh pending</button>
-</div>
-<div class="msg" id="hpMsg"></div>
-<table id="hpTbl" style="display:none">
-  <thead><tr>
-    <th>Request</th><th>Identity</th><th>Exact command</th><th>Requested</th><th></th><th></th>
-  </tr></thead>
-  <tbody id="hpRows"></tbody>
-</table>
-
-<script>
 function hpMsg(text, kind) {
   const el = document.getElementById("hpMsg");
   el.textContent = text;
   el.className = "msg " + kind;
 }
 async function loadPending() {
-  hpMsg("Loading\u2026", "info");
+  hpMsg("Loading…", "info");
   try {
     const list = await api("/v1/authorization/delegated/hall-pass/pending");
     const tb = document.getElementById("hpRows");
@@ -140,7 +239,7 @@ async function loadPending() {
         "<td><code>" + esc(r.request_id) + "</code></td>" +
         "<td><code>" + esc(r.identity_id) + "</code></td>" +
         "<td><code>" + esc(r.exact_command) + "</code></td>" +
-        "<td><span class='fine'>" + esc(r.requested_at || "\u2014") + "</span></td>" +
+        "<td><span class='fine'>" + esc(r.requested_at || "—") + "</span></td>" +
         "<td><button class='primary' onclick='approveHp(\"" + esc(r.request_id) + "\")'>Approve & get key</button></td>" +
         "<td><button onclick='denyHp(\"" + esc(r.request_id) + "\")'>Deny</button></td>";
       tb.appendChild(tr);
@@ -153,10 +252,10 @@ async function loadPending() {
 }
 async function approveHp(id) {
   if (!confirm("Approve hall pass " + id + "? Only after verifying the $25 payment.")) return;
-  hpMsg("Approving\u2026", "info");
+  hpMsg("Approving…", "info");
   try {
     const r = await api("/v1/authorization/delegated/hall-pass/" + encodeURIComponent(id) + "/approve", "POST");
-    hpMsg("Approved. KEY (copy now \u2014 shown once): " + r.key, "ok");
+    hpMsg("Approved. KEY (copy now — shown once): " + r.key, "ok");
     prompt("Copy the hall-pass key (shown once):", r.key);
     loadPending();
   } catch (e) {

@@ -1,40 +1,143 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent Control Panel</title>
+<title>UCII — Agent Control Panel</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
-  h1 { font-size: 1.4rem; }
-  .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
-  .card h2 { font-size: 1.05rem; margin: 0 0 .5rem; }
-  label { display: block; margin: .4rem 0; }
-  input[type=text] { width: 100%; padding: .5rem; font-size: 1rem; box-sizing: border-box; }
-  button { padding: .6rem 1.2rem; font-size: 1rem; border-radius: 6px; border: 1px solid #999; background: #f5f5f5; cursor: pointer; margin-top: .5rem; }
-  button.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
-  button.danger { background: #b00020; color: #fff; border-color: #b00020; }
+  :root {
+    --bg: #0b0e14;
+    --card: #131720;
+    --card-border: #1f2733;
+    --text: #e8edf3;
+    --text-dim: #8b94a3;
+    --accent: #00aaff;
+    --accent-hover: #33bbff;
+    --accent-dim: rgba(0, 170, 255, .12);
+    --input-bg: #0b0e14;
+    --input-border: #2a3442;
+    --danger: #ff3b5c;
+    --danger-dim: rgba(255, 59, 92, .12);
+    --ok: #2fd27d;
+    --ok-dim: rgba(47, 210, 125, .1);
+    --err-bg: rgba(255, 59, 92, .1);
+    --warn-bg: rgba(255, 170, 0, .08);
+    --warn-border: #b97c00;
+    --warn-text: #ffbe45;
+    --ops-bg: rgba(0, 170, 255, .12);
+  }
+  [data-theme="light"] {
+    --bg: #f7f9fc;
+    --card: #ffffff;
+    --card-border: #e1e6ee;
+    --text: #14181f;
+    --text-dim: #5b6472;
+    --accent: #0077cc;
+    --accent-hover: #0090f5;
+    --accent-dim: rgba(0, 119, 204, .08);
+    --input-bg: #ffffff;
+    --input-border: #c9d2de;
+    --danger: #c00f30;
+    --danger-dim: rgba(192, 15, 48, .07);
+    --ok: #0a7a2f;
+    --ok-dim: rgba(10, 122, 47, .07);
+    --err-bg: rgba(192, 15, 48, .06);
+    --warn-bg: #fff4e0;
+    --warn-border: #d97c00;
+    --warn-text: #7a3c00;
+    --ops-bg: #e8f3ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    max-width: 640px; margin: 0 auto; padding: 0 1rem 3rem;
+    background: var(--bg); color: var(--text);
+    transition: background .25s, color .25s;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.4rem 0 1rem;
+  }
+  .brand { display: flex; align-items: baseline; gap: .6rem; }
+  .brand .ucii {
+    font-size: 1.7rem; font-weight: 800; letter-spacing: .12em;
+    color: var(--accent);
+  }
+  .brand .sub { font-size: 1.05rem; color: var(--text-dim); font-weight: 500; }
+  #themeToggle {
+    background: var(--card); border: 1px solid var(--card-border);
+    color: var(--text); border-radius: 50%; width: 2.4rem; height: 2.4rem;
+    font-size: 1.15rem; cursor: pointer; margin: 0; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #themeToggle:hover { border-color: var(--accent); }
+  .tagline { font-size: .9rem; color: var(--text-dim); margin: 0 0 1rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 1.2rem; margin: 1rem 0;
+    transition: background .25s, border-color .25s;
+  }
+  .card h2 { font-size: 1.05rem; margin: 0 0 .6rem; color: var(--text); }
+  .card h2 .num {
+    display: inline-block; background: var(--accent-dim); color: var(--accent);
+    border-radius: 6px; padding: .1rem .45rem; margin-right: .4rem; font-size: .9rem;
+  }
+  label { display: block; margin: .5rem 0; font-size: .95rem; }
+  input[type=text] {
+    width: 100%; padding: .6rem; font-size: 1rem;
+    background: var(--input-bg); color: var(--text);
+    border: 1px solid var(--input-border); border-radius: 8px; margin-top: .3rem;
+  }
+  input[type=text]:focus { outline: none; border-color: var(--accent); }
+  input[type=text]::placeholder { color: var(--text-dim); opacity: .7; }
+  input[type=checkbox] { accent-color: var(--accent); width: 1.1rem; height: 1.1rem; vertical-align: -2px; margin-right: .4rem; }
+  button {
+    padding: .65rem 1.3rem; font-size: 1rem; border-radius: 8px;
+    border: 1px solid var(--input-border); background: var(--card);
+    color: var(--text); cursor: pointer; margin-top: .6rem; font-weight: 600;
+    transition: border-color .15s, background .15s;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  button.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+  button.danger:hover { filter: brightness(1.1); }
   button:disabled { opacity: .5; cursor: default; }
   .status { font-weight: bold; }
-  .status.active { color: #0a7a2f; }
-  .status.revoked { color: #b00020; }
-  .ops span { display: inline-block; background: #eef; border-radius: 4px; padding: .15rem .5rem; margin: .15rem; font-size: .9rem; }
-  .msg { padding: .6rem; border-radius: 6px; margin: .5rem 0; display: none; }
-  .msg.err { display: block; background: #fde; border: 1px solid #b00020; }
-  .msg.ok { display: block; background: #dfd; border: 1px solid #0a7a2f; }
-  .msg.info { display: block; background: #eef4ff; border: 1px solid #99c; }
-  .fine { font-size: .85rem; color: #555; }
-  .warn { font-size: .9rem; color: #7a3c00; background: #fff4e0; border: 1px solid #d97c00; border-radius: 6px; padding: .6rem; margin: .5rem 0; }
+  .status.active { color: var(--ok); }
+  .status.revoked { color: var(--danger); }
+  .ops span {
+    display: inline-block; background: var(--ops-bg); color: var(--accent);
+    border-radius: 6px; padding: .2rem .55rem; margin: .15rem;
+    font-size: .88rem; font-weight: 600;
+  }
+  code { font-size: .85rem; word-break: break-all; color: var(--text); }
+  .msg { padding: .65rem; border-radius: 8px; margin: .6rem 0; display: none; font-size: .92rem; }
+  .msg.err { display: block; background: var(--err-bg); border: 1px solid var(--danger); color: var(--text); }
+  .msg.ok { display: block; background: var(--ok-dim); border: 1px solid var(--ok); color: var(--text); }
+  .msg.info { display: block; background: var(--accent-dim); border: 1px solid var(--accent); color: var(--text); }
+  .fine { font-size: .85rem; color: var(--text-dim); }
+  .warn {
+    font-size: .9rem; color: var(--warn-text);
+    background: var(--warn-bg); border: 1px solid var(--warn-border);
+    border-radius: 8px; padding: .65rem; margin: .6rem 0;
+  }
   .hidden { display: none; }
 </style>
 </head>
 <body>
 
-<h1>Agent Control Panel</h1>
-<p class="fine">Manage your gated agent's authority. Your agent's identity never changes — only its grants do.</p>
+<header>
+  <div class="brand">
+    <span class="ucii">UCII</span>
+    <span class="sub">Agent Control Panel</span>
+  </div>
+  <button id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark">☀️</button>
+</header>
+<p class="tagline">Manage your gated agent's authority. Your agent's identity never changes — only its grants do.</p>
 
 <div class="card">
-  <h2>1. Your credentials</h2>
+  <h2><span class="num">1</span>Your credentials</h2>
   <label>Authority ID (from your credentials email)
     <input type="text" id="authId" placeholder="paste authority ID" autocomplete="off">
   </label>
@@ -46,12 +149,12 @@
 </div>
 
 <div class="card hidden" id="statusCard">
-  <h2>2. Status</h2>
+  <h2><span class="num">2</span>Status</h2>
   <div id="statusBody"></div>
 </div>
 
 <div class="card hidden" id="replaceCard">
-  <h2>3. Replace grant</h2>
+  <h2><span class="num">3</span>Replace grant</h2>
   <p class="fine">Pick the operations for the new grant. The old grant is revoked and a new one begins — same identity.</p>
   <label><input type="checkbox" class="op" value="ssh.exec:read" checked> read — run read-only commands</label>
   <label><input type="checkbox" class="op" value="ssh.exec:git" checked> git — clone, pull, push</label>
@@ -63,14 +166,14 @@
 </div>
 
 <div class="card hidden" id="killCard">
-  <h2>4. Kill switch</h2>
+  <h2><span class="num">4</span>Kill switch</h2>
   <p class="fine">Revoke this grant immediately. Your agent stops on its next check. If you kill it, you kill it — mid-month kills are not refunded.</p>
   <button class="danger" id="killBtn" onclick="killGrant()">Revoke this grant</button>
   <div class="msg" id="killMsg"></div>
 </div>
 
 <div class="card hidden" id="destrCard">
-  <h2>5. Hall pass — $25</h2>
+  <h2><span class="num">5</span>Hall pass — $25</h2>
   <p class="fine">One specific dangerous command, approved by the UCII Admin, live for 2 hours, then it expires automatically. Hall passes are never standing.</p>
   <p class="warn">⚠️ A hall pass lets your agent run one command that can permanently delete or destroy data. Double-check the exact command before you request it — this cannot be undone.</p>
   <label>Exact command (must match character-for-character)
@@ -89,7 +192,35 @@
   <div class="msg" id="hpActivateMsg"></div>
 </div>
 
+<div class="card hidden" id="auditCard">
+  <h2><span class="num">6</span>Your agent's audit log</h2>
+  <p>Every command your agent runs — allowed or denied — is recorded in a log file <strong>on your agent's own server</strong>. UCII never sees it, never stores it, never touches it. It's yours.</p>
+  <p><code>/opt/ucii/ucii-agent-gate/audit.log</code></p>
+  <p>Each line is one command with a timestamp, what was run, whether it was allowed or denied, and why. To read it, SSH into your agent's server and run:</p>
+  <p><code>cat /opt/ucii/ucii-agent-gate/audit.log</code></p>
+  <p class="fine">Tip: <code>tail -f /opt/ucii/ucii-agent-gate/audit.log</code> watches it live as your agent works.</p>
+  <p>Want a clean, shareable report? Run this on your agent's server:</p>
+  <p><code>python3 /opt/ucii/ucii-agent-gate/scripts/audit_report.py</code></p>
+  <p class="fine">It generates a formatted HTML report from your audit log. Open it in a browser, print to PDF if you need a portable copy. Your data never leaves your server.</p>
+</div>
+
 <script>
+// ---- theme ----
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  try { localStorage.setItem("ucii-theme", next); } catch (e) {}
+  document.getElementById("themeToggle").textContent = next === "dark" ? "☀️" : "🌙";
+}
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem("ucii-theme"); } catch (e) {}
+  const theme = saved || "dark";
+  document.documentElement.setAttribute("data-theme", theme);
+  document.getElementById("themeToggle").textContent = theme === "dark" ? "☀️" : "🌙";
+})();
+
 // ---- config ----
 const API_BASE = "https://ucii.sportgen-ai.com"; // UCII server; serve this page same-origin in production
 
@@ -145,7 +276,7 @@ async function loadAuthority() {
       '<div>Status: <span class="status ' + (a.authority_state === "ACTIVE" ? "active" : "revoked") + '">' + esc(a.authority_state) + '</span></div>' +
       '<div class="ops">Granted: ' + (a.allowed_operations || []).map((o) => "<span>" + esc(o) + "</span>").join("") + '</div>' +
       '<div class="fine">Granted: ' + esc(a.granted_at || "—") + (a.last_seen ? ' · Last seen: ' + esc(a.last_seen) : '') + '</div>';
-    for (const c of ["statusCard", "replaceCard", "killCard", "destrCard"])
+    for (const c of ["statusCard", "replaceCard", "killCard", "destrCard", "auditCard"])
       document.getElementById(c).classList.remove("hidden");
     // pre-check the boxes to match the current grant
     document.querySelectorAll(".op").forEach((cb) => {
@@ -204,11 +335,11 @@ async function requestHallPass() {
   const cmd = document.getElementById("hpCommand").value.trim();
   if (!cmd) { msg("destrMsg", "Type the exact command first.", "err"); return; }
   if (!confirm("Request a hall pass for exactly: " + cmd + "? The UCII Admin reviews after $25 payment (up to 24 hours).")) return;
-  msg("destrMsg", "Requesting\u2026", "info");
+  msg("destrMsg", "Requesting…", "info");
   try {
     const r = await api("/v1/authorization/delegated/" + encodeURIComponent(current.authority_id) + "/hall-pass/request",
       "POST", { control_secret: current.control_secret, exact_command: cmd });
-    msg("destrMsg", "Request " + r.request_id + " is pending. " + r.message + " Save your request ID \u2014 you'll need it to activate.", "ok");
+    msg("destrMsg", "Request " + r.request_id + " is pending. " + r.message + " Save your request ID — you'll need it to activate.", "ok");
     document.getElementById("hpRequestId").value = r.request_id;
   } catch (e) {
     msg("destrMsg", "Couldn't request: " + e.message, "err");
@@ -222,7 +353,7 @@ async function activateHallPass() {
   const key = document.getElementById("hpKey").value.trim();
   if (!rid || !key) { msg("hpActivateMsg", "Paste both the request ID and the key.", "err"); return; }
   if (!confirm("Activate this hall pass? Your 2-hour window starts NOW.")) return;
-  msg("hpActivateMsg", "Activating\u2026", "info");
+  msg("hpActivateMsg", "Activating…", "info");
   try {
     const r = await api("/v1/authorization/delegated/" + encodeURIComponent(current.authority_id) + "/hall-pass/activate",
       "POST", { control_secret: current.control_secret, request_id: rid, key: key });
