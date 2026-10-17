@@ -30,16 +30,19 @@
 <p class="fine">Every delegated authority on this server. Revoke is immediate, logged, irreversible — restoration is a new grant. You don't need this page for routine customer actions; customers manage themselves. This is the fire axe: abuse, non-payment, compromise.</p>
 
 <div>
+  <label>Operator secret
+    <input type="text" id="opSecret" placeholder="paste X-Operator-Secret" autocomplete="off" style="width:420px">
+  </label>
+</div>
+<div style="margin-top:.5rem">
   <button class="primary" onclick="loadAll()">Refresh list</button>
-  <span class="fine">or revoke one ID directly:</span>
-  <input type="text" id="oneId" placeholder="authority ID" autocomplete="off">
-  <button class="danger" onclick="revokeOne()">Revoke</button>
+  <span class="fine">Revoke is operator-lifecycle authed (server side) — use the API directly, not this panel.</span>
 </div>
 <div class="msg" id="msg"></div>
 
 <table id="tbl" style="display:none">
   <thead><tr>
-    <th>Agent / customer</th><th>Authority</th><th>Operations</th><th>Granted</th><th>Last seen</th><th>Status</th><th></th>
+    <th>Authority</th><th>Identity</th><th>Operations</th><th>Granted by</th><th>Granted</th><th>Status</th>
   </tr></thead>
   <tbody id="rows"></tbody>
 </table>
@@ -55,13 +58,20 @@ function msg(text, kind) {
   el.textContent = text;
   el.className = "msg " + kind;
 }
+function getOpSecret() {
+  return document.getElementById("opSecret").value.trim();
+}
 function api(path, method, body) {
+  const headers = { "Content-Type": "application/json" };
+  const s = getOpSecret();
+  if (s) headers["X-Operator-Secret"] = s;
   return fetch(API_BASE + path, {
     method: method || "GET",
-    headers: { "Content-Type": "application/json" },
+    headers: headers,
     body: body ? JSON.stringify(body) : undefined,
   }).then(async (r) => {
     if (r.status === 404) throw new Error("not-found");
+    if (r.status === 403) throw new Error("forbidden — check your operator secret");
     if (!r.ok) throw new Error("HTTP " + r.status);
     return r.json();
   });
@@ -73,7 +83,7 @@ function esc(s) {
 async function loadAll() {
   msg("Loading…", "info");
   try {
-    // GET /v1/authorization/delegated/authorities — NEEDS ADDING (see API-CONTRACT.md).
+    // GET /v1/authorization/delegated/authorities.
     // Operator-authenticated server side; never exposed without the secret path.
     const list = await api("/v1/authorization/delegated/authorities");
     const tb = document.getElementById("rows");
@@ -81,15 +91,12 @@ async function loadAll() {
     for (const a of list) {
       const tr = document.createElement("tr");
       tr.innerHTML =
-        "<td>" + esc(a.agent_name || "—") + "<br><span class='fine'>" + esc(a.customer || "") + "</span></td>" +
-        "<td><code>" + esc(a.authority_id) + "</code><br><span class='fine'>" + esc(a.identity_id) + "</span></td>" +
+        "<td><code>" + esc(a.authority_id) + "</code></td>" +
+        "<td><code>" + esc(a.identity_id) + "</code></td>" +
         "<td><span class='fine'>" + esc((a.allowed_operations || []).join(", ")) + "</span></td>" +
+        "<td><span class='fine'>" + esc(a.granted_by || "—") + "</span></td>" +
         "<td><span class='fine'>" + esc(a.granted_at || "—") + "</span></td>" +
-        "<td><span class='fine'>" + esc(a.last_seen || "—") + "</span></td>" +
-        "<td class='status " + (a.authority_state === "ACTIVE" ? "active" : "revoked") + "'>" + esc(a.authority_state) + "</td>" +
-        "<td>" + (a.authority_state === "ACTIVE"
-          ? "<button class='danger' onclick='revokeId(\"" + esc(a.authority_id) + "\")'>Revoke</button>"
-          : "") + "</td>";
+        "<td class='status " + (a.authority_state === "ACTIVE" ? "active" : "revoked") + "'>" + esc(a.authority_state) + "</td>";
       tb.appendChild(tr);
     }
     document.getElementById("tbl").style.display = "";
@@ -101,24 +108,72 @@ async function loadAll() {
   }
 }
 
-async function revokeId(id) {
-  if (!confirm("Revoke authority " + id + "? Immediate and irreversible.")) return;
-  msg("Revoking…", "info");
+
+<h2 style="margin-top:2rem">Hall-pass requests</h2>
+<p class="fine">Pending customer hall-pass requests. Verify the $25 payment, then approve to get a one-time key (copy it into your email). Or deny with a reason.</p>
+<div>
+  <button class="primary" onclick="loadPending()">Refresh pending</button>
+</div>
+<div class="msg" id="hpMsg"></div>
+<table id="hpTbl" style="display:none">
+  <thead><tr>
+    <th>Request</th><th>Identity</th><th>Exact command</th><th>Requested</th><th></th><th></th>
+  </tr></thead>
+  <tbody id="hpRows"></tbody>
+</table>
+
+<script>
+function hpMsg(text, kind) {
+  const el = document.getElementById("hpMsg");
+  el.textContent = text;
+  el.className = "msg " + kind;
+}
+async function loadPending() {
+  hpMsg("Loading\u2026", "info");
   try {
-    // POST /v1/authorization/delegated/{authority_id}/revoke — EXISTS (operator lifecycle auth, server side).
-    await api("/v1/authorization/delegated/" + encodeURIComponent(id) + "/revoke",
-      "POST", { reason: "operator revoke" });
-    msg("Revoked: " + id, "ok");
-    loadAll();
+    const list = await api("/v1/authorization/delegated/hall-pass/pending");
+    const tb = document.getElementById("hpRows");
+    tb.innerHTML = "";
+    for (const r of list) {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td><code>" + esc(r.request_id) + "</code></td>" +
+        "<td><code>" + esc(r.identity_id) + "</code></td>" +
+        "<td><code>" + esc(r.exact_command) + "</code></td>" +
+        "<td><span class='fine'>" + esc(r.requested_at || "\u2014") + "</span></td>" +
+        "<td><button class='primary' onclick='approveHp(\"" + esc(r.request_id) + "\")'>Approve & get key</button></td>" +
+        "<td><button onclick='denyHp(\"" + esc(r.request_id) + "\")'>Deny</button></td>";
+      tb.appendChild(tr);
+    }
+    document.getElementById("hpTbl").style.display = list.length ? "" : "none";
+    hpMsg(list.length ? ("Loaded " + list.length + " pending.") : "No pending requests.", "ok");
   } catch (e) {
-    msg("Couldn't revoke: " + e.message, "err");
+    hpMsg("Couldn't load: " + e.message, "err");
   }
 }
-
-function revokeOne() {
-  const id = document.getElementById("oneId").value.trim();
-  if (!id) { msg("Paste an authority ID first.", "err"); return; }
-  revokeId(id);
+async function approveHp(id) {
+  if (!confirm("Approve hall pass " + id + "? Only after verifying the $25 payment.")) return;
+  hpMsg("Approving\u2026", "info");
+  try {
+    const r = await api("/v1/authorization/delegated/hall-pass/" + encodeURIComponent(id) + "/approve", "POST");
+    hpMsg("Approved. KEY (copy now \u2014 shown once): " + r.key, "ok");
+    prompt("Copy the hall-pass key (shown once):", r.key);
+    loadPending();
+  } catch (e) {
+    hpMsg("Couldn't approve: " + e.message, "err");
+  }
+}
+async function denyHp(id) {
+  const reason = prompt("Deny reason (optional):", "") || "";
+  if (!confirm("Deny hall pass " + id + "?")) return;
+  try {
+    await api("/v1/authorization/delegated/hall-pass/" + encodeURIComponent(id) + "/deny",
+      "POST", { reason: reason });
+    hpMsg("Denied: " + id, "ok");
+    loadPending();
+  } catch (e) {
+    hpMsg("Couldn't deny: " + e.message, "err");
+  }
 }
 </script>
 </body>

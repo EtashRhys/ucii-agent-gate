@@ -73,8 +73,20 @@
   <h2>5. Hall pass — $25</h2>
   <p class="fine">One specific dangerous command, approved by the UCII Admin, live for 2 hours, then it expires automatically. Hall passes are never standing.</p>
   <p class="warn">⚠️ A hall pass lets your agent run one command that can permanently delete or destroy data. Double-check the exact command before you request it — this cannot be undone.</p>
+  <label>Exact command (must match character-for-character)
+    <input type="text" id="hpCommand" placeholder="e.g. rm -rf /var/cache/myapp/*" autocomplete="off">
+  </label>
   <button onclick="requestHallPass()">Request hall pass — $25</button>
   <div class="msg" id="destrMsg"></div>
+  <p class="fine" style="margin-top:1rem">Already have a key? Paste it below to activate your 2-hour window.</p>
+  <label>Request ID (from your request)
+    <input type="text" id="hpRequestId" placeholder="paste request ID" autocomplete="off">
+  </label>
+  <label>Activation key (from the UCII Admin's email)
+    <input type="text" id="hpKey" placeholder="paste key (hp_...)" autocomplete="off">
+  </label>
+  <button class="primary" onclick="activateHallPass()">Activate hall pass</button>
+  <div class="msg" id="hpActivateMsg"></div>
 </div>
 
 <script>
@@ -125,7 +137,7 @@ async function loadAuthority() {
   if (!id) { msg("loadMsg", "Paste your authority ID first.", "err"); return; }
   msg("loadMsg", "Loading…", "info");
   try {
-    // GET /v1/authorization/delegated/{authority_id} — NEEDS ADDING (see API-CONTRACT.md)
+    // GET /v1/authorization/delegated/{authority_id}
     const a = await api("/v1/authorization/delegated/" + encodeURIComponent(id));
     current = { authority_id: id, identity_id: a.identity_id, control_secret };
     document.getElementById("statusBody").innerHTML =
@@ -155,7 +167,7 @@ async function replaceGrant() {
   if (!confirm("Replace this grant? The old grant is revoked and a new one begins. Same identity.")) return;
   msg("replaceMsg", "Working…", "info");
   try {
-    // POST /v1/authorization/delegated/{authority_id}/replace — NEEDS ADDING (see API-CONTRACT.md)
+    // POST /v1/authorization/delegated/{authority_id}/replace
     const r = await api("/v1/authorization/delegated/" + encodeURIComponent(current.authority_id) + "/replace",
       "POST", { control_secret: current.control_secret, allowed_operations: ops });
     document.getElementById("authId").value = r.authority_id;
@@ -174,7 +186,7 @@ async function killGrant() {
   if (!confirm("Revoke this grant? Your agent stops on its next check. This can't be undone — a new grant starts fresh.")) return;
   msg("killMsg", "Working…", "info");
   try {
-    // POST /v1/authorization/delegated/{authority_id}/customer-revoke — NEEDS ADDING (see API-CONTRACT.md)
+    // POST /v1/authorization/delegated/{authority_id}/customer-revoke
     await api("/v1/authorization/delegated/" + encodeURIComponent(current.authority_id) + "/customer-revoke",
       "POST", { control_secret: current.control_secret, reason: "customer kill switch" });
     msg("killMsg", "Grant revoked. Your agent is stopped.", "ok");
@@ -188,8 +200,36 @@ async function killGrant() {
 // ---- 5. hall pass ----
 async function requestHallPass() {
   clearMsg("destrMsg");
-  msg("destrMsg", "Hall passes are approved by the UCII Admin after you request here — " +
-    "this request flow is not wired up yet. A hall pass ($25, 2 hours, one specific command) is the only way to authorize a dangerous command.", "info");
+  if (!current.control_secret) { msg("destrMsg", "Paste your control secret first.", "err"); return; }
+  const cmd = document.getElementById("hpCommand").value.trim();
+  if (!cmd) { msg("destrMsg", "Type the exact command first.", "err"); return; }
+  if (!confirm("Request a hall pass for exactly: " + cmd + "? The UCII Admin reviews after $25 payment (up to 24 hours).")) return;
+  msg("destrMsg", "Requesting\u2026", "info");
+  try {
+    const r = await api("/v1/authorization/delegated/" + encodeURIComponent(current.authority_id) + "/hall-pass/request",
+      "POST", { control_secret: current.control_secret, exact_command: cmd });
+    msg("destrMsg", "Request " + r.request_id + " is pending. " + r.message + " Save your request ID \u2014 you'll need it to activate.", "ok");
+    document.getElementById("hpRequestId").value = r.request_id;
+  } catch (e) {
+    msg("destrMsg", "Couldn't request: " + e.message, "err");
+  }
+}
+
+async function activateHallPass() {
+  clearMsg("hpActivateMsg");
+  if (!current.control_secret) { msg("hpActivateMsg", "Paste your control secret first.", "err"); return; }
+  const rid = document.getElementById("hpRequestId").value.trim();
+  const key = document.getElementById("hpKey").value.trim();
+  if (!rid || !key) { msg("hpActivateMsg", "Paste both the request ID and the key.", "err"); return; }
+  if (!confirm("Activate this hall pass? Your 2-hour window starts NOW.")) return;
+  msg("hpActivateMsg", "Activating\u2026", "info");
+  try {
+    const r = await api("/v1/authorization/delegated/" + encodeURIComponent(current.authority_id) + "/hall-pass/activate",
+      "POST", { control_secret: current.control_secret, request_id: rid, key: key });
+    msg("hpActivateMsg", "Hall pass active until " + r.expires_at + ". Your agent can now run the approved command.", "ok");
+  } catch (e) {
+    msg("hpActivateMsg", "Couldn't activate: " + e.message, "err");
+  }
 }
 
 function esc(s) {
