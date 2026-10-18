@@ -211,6 +211,11 @@ window, one specific command).
 - For UCII identity operations, the operator approves each step. The
   agent never self-provisions, never self-grants.
 
+**See it in production:** [Case study 001](docs/case-studies/001-rocky-radio-dashboard.md) —
+an independently identified AI agent published a real GitHub repo through
+this gate: 22 commands checked, 3 denied (including a Git identity change),
+zero escalations, full audit trail. The denied command is the story.
+
 ## Files
 
 - `gate.py` — the gate (UCII-authority edition)
