@@ -206,7 +206,7 @@ The last two demonstrate the full authority lifecycle, not just classification. 
 - The full audit trail stays private on the operator's server; only sanitized excerpts (truncated IDs, no hostnames, no credential paths, no key material) ship in the repo.
 - A short pointer from the main README ("See it in production →") turns the case study into a sales asset without restructuring the repo.
 
-**Not yet committed.** Per the operator's instruction, this draft returns for approval first. No repo files were modified, nothing was pushed, no services were touched during evidence gathering.
+**Publication status.** This case study was approved and committed to the public `ucii-agent-gate` repository after evidence gathering. No gate, grant, service, or production configuration was modified during the read-only evidence-gathering phase.
 
 ---
 
