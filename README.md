@@ -216,6 +216,12 @@ an independently identified AI agent published a real GitHub repo through
 this gate: 22 commands checked, 3 denied (including a Git identity change),
 zero escalations, full audit trail. The denied command is the story.
 
+**Case study 002:** [The revocation lifecycle, exercised end-to-end on production](docs/case-studies/002-revocation-lifecycle.md) —
+both revocation paths — the operator's, and the customer's own kill switch —
+were exercised live on the production agent. Both were silently broken;
+both were found, repaired, and re-proven the same day, with timings.
+Revocation you haven't tested is a rumor.
+
 **Scenario analysis:** [PHP2Shell and the compromised automation host](docs/scenarios/php2shell-compromised-automation-host.md) —
 when the runtime itself is breached (PHP's 2026-10-21 critical RCE release),
 what a gated agent's authority should and should not still be able to do,
