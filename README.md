@@ -216,6 +216,11 @@ an independently identified AI agent published a real GitHub repo through
 this gate: 22 commands checked, 3 denied (including a Git identity change),
 zero escalations, full audit trail. The denied command is the story.
 
+**Scenario analysis:** [PHP2Shell and the compromised automation host](docs/scenarios/php2shell-compromised-automation-host.md) —
+when the runtime itself is breached (PHP's 2026-10-21 critical RCE release),
+what a gated agent's authority should and should not still be able to do,
+and the operator playbook for containing it.
+
 ## Files
 
 - `gate.py` — the gate (UCII-authority edition)
