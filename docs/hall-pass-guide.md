@@ -28,7 +28,7 @@ You will handle three things in this process. Keep them separate in your mind �
 
 The Admin verifies your $25 payment, then approves the request and emails you your **activation key**.
 
-- The key is generated at approval and shown to the Admin **once** — if the email doesn't arrive within 24 hours, contact the Admin; a lost key cannot be re-sent (only its fingerprint is stored), but the Admin can void the request and you can submit a fresh one.
+- The key is generated at approval and shown to the Admin **once** — if the email doesn't arrive within 24 hours, contact the Admin. A lost key cannot be re-sent (only its fingerprint is stored); the unused request is inert — it can never be activated without the key — so simply submit a fresh request.
 - Nothing is live yet. Your agent cannot run the command until you finish step 3.
 
 ## Step 3 — Activate the pass (customer panel)
@@ -56,5 +56,5 @@ The Admin verifies your $25 payment, then approves the request and emails you yo
 | "invalid hall-pass key" on activate | The Request ID was pasted into the key field, or the key was copied with missing/extra characters | The key starts with `hp_`; the Request ID doesn't. Re-copy the key from the Admin's email exactly |
 | "invalid hall-pass key" and you never got an email | The request hasn't been approved yet — no key exists | Wait for the approval email (up to 24 hours), or contact the Admin |
 | Agent's command denied despite an active pass | The command doesn't match the approved text character-for-character, or the window has closed | Compare the command to your request exactly; if the window closed, request a new pass |
-| Key lost / email deleted | Keys are shown once and stored only as a fingerprint | Contact the Admin — the request can be voided and you can submit a new one |
+| Key lost / email deleted | Keys are shown once and stored only as a fingerprint | The unused request is inert without the key — submit a new request (and tell the Admin to expect it) |
 | You lost your **control secret** | There is no self-service reset for it, by design | Contact the Admin (the operator). They can revoke and re-issue your grant with a fresh secret |
