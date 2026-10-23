@@ -18,7 +18,7 @@ He did not. The secret for the subject authority had been displayed once, in an 
 
 That accident produced the exercise's first finding, stated plainly:
 
-**A customer who loses the control secret has no self-service recovery. None.** The only path back is an operator reset: the operator revokes the grant and issues a new one with a fresh secret. We ran that path live — revoke, then re-grant with a new secret delivered to the human, who recorded it this time. Elapsed time was in line with the operator revocation timing in case study 002 (about three minutes). The system fails safe — a lost secret locks the human out rather than letting anyone in — but the recovery is a support event, not a button. Customers should be told that at onboarding, in so many words: *if you lose this secret, contact the operator; there is no reset link.*
+**A customer who loses the control secret has no self-service recovery. None.** The only path back is an operator reset: the operator revokes the grant and issues a new one with a fresh secret. We ran that path live — revoke, then re-grant with a new secret delivered to the human, who recorded it this time. Elapsed time was in line with case study 002's operator revoke-to-restore timing (3m 04s). The system fails safe — a lost secret locks the human out rather than letting anyone in — but the recovery is a support event, not a button. Customers should be told that at onboarding, in so many words: *if you lose this secret, contact the operator; there is no reset link.*
 
 ## Test 1 — replace: narrow the grant, then restore it
 
