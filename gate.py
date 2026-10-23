@@ -15,6 +15,11 @@ Every SSH command from that key lands here. The gate:
      and logs the fallback. (Fail-closed for everyone else.)
   4. Writes one line per decision to audit.log.
 
+  DESTRUCTIVE NEVER GOES THROUGH THE GATE. A destructive-classified
+  command is denied at the gate itself, before any grant is consulted.
+  Destructive work happens at the operator's own terminal, not the
+  agent's. (Decision: Brad, 2026-10-23.)
+
 Setup (one time, needs the UCII Admin's controller authority):
   a. Generate a keypair:  python3 scripts/ucii_setup.py --gen-key
   b. The UCII Admin registers the AI_AGENT identity + credential on the UCII server
@@ -56,25 +61,29 @@ def utcnow():
 # ---------------------------------------------------------------------------
 
 DESTRUCTIVE_PATTERNS = [
-    r"\brm\s+[^;|&]*-[a-z]*r",
+    r"\brm\s+[^;|&]*-[a-zA-Z]*[rR]",
+    r"\brm\s+[^;|&]*--recursive",
+    r"^\s*rm\b",
+    r"^\s*shred\b",
+    r"^\s*truncate\b",
+    r"^\s*dd\b[^;|&]*\bof=",
     r"\bmkfs\b",
     r"\bdd\b[^;|&]*of=/dev/",
     r"\bwipefs\b",
     r"\bshutdown\b", r"\breboot\b", r"\bhalt\b", r"\bpoweroff\b",
     r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;",
     r"\bchmod\s+-R\s+777\s+/",
-    r"\bchown\s+-R[^;|&]*/\s",
+    r"\bchown\s+-R[^;|&]*/(\s|$)",
     r">\s*/dev/sd[a-z]",
     r"\bmv\s+/\s",
 ]
 
 READ_PATTERNS = [
     r"^(ls|cat|head|tail|less|more|grep|egrep|fgrep|find|df|du|uptime|"
-    r"whoami|pwd|echo|stat|file|wc|sort|uniq|cut|awk|sed|date|env|"
+    r"whoami|pwd|echo|stat|file|wc|sort|uniq|cut|awk|sed|date|env|diff|cmp|comm|"
     r"printenv|id|groups|ps|free|uname|hostname|which|test|\[|true|false|"
     r"printf|basename|dirname|realpath|readlink|md5sum|sha256sum|"
-    r"systemctl\s+status|journalctl|"
-    r"git\s+(status|log|diff|show|branch|remote|fetch))\b",
+    r"systemctl\s+status|journalctl)\b",
     r"^\s*cd\b",
     r"^\s*git\s+(--version|--help)\b",
     r"^\s*git\s*$",
@@ -82,9 +91,7 @@ READ_PATTERNS = [
     r"list-units|list-sockets|list-timers|cat)\b",
 ]
 
-GIT_PATTERNS = [
-    r"^\s*git\s+(clone|pull|push|fetch|commit|add|checkout|merge|rebase|tag)\b",
-]
+# git is priced by _classify_git (subcommand + argument rules).
 
 FILE_OP_PATTERNS = [
     r"^\s*(mkdir|touch|cp|mv|ln|chmod|chown|tee|unzip|tar|rsync|scp)\b",
@@ -97,7 +104,6 @@ SERVICE_PATTERNS = [
     r"^\s*(python3?|pip3?|node|npm|cargo|go|java|dotnet)\b",
     r"^\s*systemctl\s+(start|stop|restart|reload|enable|disable)\b",
     r"^\s*(nginx|certbot)\b",
-    r"^\s*crontab\b",
 ]
 
 
@@ -109,7 +115,12 @@ CLASS_SEVERITY = [
 
 
 def split_compound(command):
-    """Split on && || ; | respecting single/double quotes."""
+    """Split on && || ; | newline and bare &, respecting quotes.
+
+    A bare & is a command separator in bash (background operator). It is
+    not a separator inside `&>` (redirect-all), `>&` (fd duplication), or
+    `2>&1`-style fd juggling, where the previous character is `>`.
+    """
     parts, current = [], []
     in_single, in_double = False, False
     i, n = 0, len(command)
@@ -128,9 +139,17 @@ def split_compound(command):
                 current = []
                 i += 2
                 continue
-            elif c in (";", "|"):
+            elif c in (";", "|", "\n"):
                 parts.append("".join(current).strip())
                 current = []
+            elif c == "&":
+                prev = current[-1] if current else ""
+                nxt = command[i + 1] if i + 1 < n else ""
+                if prev == ">" or nxt == ">":
+                    current.append(c)  # redirect syntax, not a separator
+                else:
+                    parts.append("".join(current).strip())
+                    current = []
             else:
                 current.append(c)
         else:
@@ -141,26 +160,341 @@ def split_compound(command):
 
 
 def has_output_redirect(part):
-    """True if the part redirects stdout to a file (a write)."""
-    cleaned = re.sub(r"2\s*>", "", part)
-    cleaned = re.sub(r"&\s*>", "", cleaned)
-    return bool(re.search(r">", cleaned))
+    """True if the part redirects output to a file (a write).
+
+    Any `>` that is not fd duplication (`>&1`, `>&-`) writes to a file —
+    including `2>file` and `&>file`. An earlier version stripped those
+    before checking; stderr redirection still creates the file.
+    Redirects to /dev/null are discards, not writes, and are exempt
+    (audit-log replay, 2026-10-23: 53 real read commands carried
+    `2>/dev/null`; pricing them as writes distorted the audit trail
+    and would overcharge x402 reads).
+    """
+    part = re.sub(r"&>>?\s*/dev/null", "", part)
+    part = re.sub(r"\d*>>?\s*/dev/null", "", part)
+    i, n = 0, len(part)
+    while i < n:
+        if part[i] == ">":
+            nxt = part[i + 1] if i + 1 < n else ""
+            if nxt == "&":
+                after = part[i + 2] if i + 2 < n else ""
+                if after.isdigit() or after == "-":
+                    i += 2
+                    continue
+                return True
+            return True
+        if part[i] == "&" and i + 1 < n and part[i + 1] == ">":
+            return True
+        i += 1
+    return False
 
 
-def classify_single(part):
-    """Classify one shell-simple command (no compounds)."""
+def _substitution_inners(part):
+    """Inner strings of $(...), `...`, <(...) outside single quotes.
+
+    Substitution executes even inside double quotes, so only
+    single-quoted spans are literal. Returns (inners, unbalanced).
+    """
+    inners, i, n = [], 0, len(part)
+    in_single = False
+    while i < n:
+        c = part[i]
+        if c == "'":
+            in_single = not in_single
+            i += 1
+            continue
+        if in_single:
+            i += 1
+            continue
+        if part.startswith("$(", i) or part.startswith("<(", i):
+            depth, j = 0, i + 1
+            start = j + 1
+            while j < n:
+                if part[j] == "(":
+                    depth += 1
+                elif part[j] == ")":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                j += 1
+            if depth != 0:
+                return inners, True
+            inners.append(part[start:j])
+            i = j + 1
+            continue
+        if c == "`":
+            j = part.find("`", i + 1)
+            if j == -1:
+                return inners, True
+            inners.append(part[i + 1:j])
+            i = j + 1
+            continue
+        i += 1
+    return inners, False
+
+
+def _tokens(part):
+    import shlex
+    p = part.strip()
+    if p.endswith("\\") and not p.endswith("\\\\"):
+        p = p[:-1]  # trailing escape left by compound splitting (\;)
+    try:
+        return shlex.split(p)
+    except ValueError:
+        return None
+
+
+def _strictest(classes):
+    for c in CLASS_SEVERITY:
+        if c in classes:
+            return c
+    return "unclassified"
+
+
+def _normalized(part):
+    """Reduce a path-prefixed verb (/usr/bin/sed) to its basename so the
+    pattern lists and verb rules see one form. Arguments are untouched."""
+    m = re.match(r"^\s*(\S+)(.*)$", part, re.DOTALL)
+    if m and "/" in m.group(1):
+        return os.path.basename(m.group(1)) + m.group(2)
+    return part
+
+
+def _classify_git(tokens):
+    """Price a git command by subcommand and arguments.
+
+    Read-only git: status; log/show/diff without --output; branch and
+    remote in their list forms; bare invocations. Ref/config/worktree
+    writes are git-class; clean and reset --hard destroy work and are
+    destructive. Global flags (-C, -c, ...) fail closed.
+    """
+    if len(tokens) < 2:
+        return "read"
+    sub = tokens[1]
+    if sub in ("--version", "--help"):
+        return "read"
+    if sub.startswith("-"):
+        return "unclassified"
+    args = tokens[2:]
+    if sub == "status":
+        return "read"
+    if sub in ("log", "show", "diff"):
+        if any(a.startswith("--output") for a in args):
+            return "file-op"
+        return "read"
+    if sub == "branch":
+        if not args:
+            return "read"
+        write_flags = {"-d", "-D", "-m", "-M", "-c", "-C", "-u", "-f",
+                       "--delete", "--move", "--copy", "--force",
+                       "--unset-upstream"}
+        if any(a in write_flags or a.startswith("--set-upstream")
+               for a in args):
+            return "git"
+        list_flags = {"-a", "-r", "-v", "-vv", "--all", "--list",
+                      "--verbose", "--show-current"}
+        if all(a in list_flags or a.startswith("--format")
+               for a in args):
+            return "read"
+        return "git"  # a positional name creates a branch
+    if sub == "remote":
+        if not args or args[0] in ("-v", "--verbose", "show", "get-url"):
+            return "read"
+        return "git"
+    if sub in ("fetch", "pull", "push", "clone", "commit", "add",
+               "checkout", "merge", "rebase", "tag"):
+        return "git"
+    if sub == "clean":
+        return "destructive"
+    if sub == "reset":
+        return "destructive" if "--hard" in args else "unclassified"
+    return "unclassified"
+
+
+def _classify_find(tokens, depth):
+    """find is a read only without its payload flags."""
+    for i, t in enumerate(tokens):
+        if t == "-delete":
+            return "destructive"
+        if t in ("-exec", "-execdir"):
+            payload = []
+            for u in tokens[i + 1:]:
+                if u in (";", "+"):
+                    break
+                payload.append(u)
+            if payload:
+                return _classify(" ".join(payload), depth + 1)
+            return "service"
+        if t in ("-fprint", "-fprintf", "-fls"):
+            return "file-op"
+    return "read"
+
+
+def _classify_sed(tokens):
+    """sed edits in place with -i, writes with the s///w and w commands,
+    and executes with the e command. A script FILE (-f) cannot be
+    inspected, so it is priced as a write. Returns None for plain
+    to-stdout sed (priced by the read patterns)."""
+    args = tokens[1:]
+    for a in args:
+        if a == "--in-place" or a.startswith("--in-place="):
+            return "file-op"
+        if a.startswith("-") and not a.startswith("--") and "i" in a[1:]:
+            return "file-op"
+        if a in ("-f", "--file"):
+            return "file-op"
+    script = " ".join(args)
+    if re.search(r"(^|[;\s])e\s+\S", script) or re.search(r"\de\s+\S", script):
+        return "service"
+    if re.search(r"/w\s+\S", script) or re.search(r"(^|[;\s])w\s+\S", script):
+        return "file-op"
+    return None
+
+
+def _classify_awk(tokens):
+    """awk executes via system() and the getline pipe. (awk's print >
+    is already caught by the redirect check.)"""
+    prog = " ".join(tokens[1:])
+    if "system(" in prog or "getline" in prog:
+        return "service"
+    return None
+
+
+def _classify_sort(tokens):
+    if any(a == "-o" or a.startswith("--output") for a in tokens[1:]):
+        return "file-op"
+    return None
+
+
+def _classify_uniq(tokens):
+    skip_next = {"-f", "-s", "-w"}
+    operands, i = [], 1
+    while i < len(tokens):
+        t = tokens[i]
+        if t in skip_next:
+            i += 2
+            continue
+        if not t.startswith("-"):
+            operands.append(t)
+        i += 1
+    if len(operands) >= 2:
+        return "file-op"
+    return None
+
+
+def _classify_journalctl(tokens):
+    bad = ("--vacuum", "--rotate", "--flush", "--sync", "--relinquish",
+           "--smart-relinquish")
+    if any(a.startswith(bad) for a in tokens[1:]):
+        return "file-op"
+    return None
+
+
+def _classify_date(tokens):
+    if any(a in ("-s", "--set") or a.startswith("--set=")
+           for a in tokens[1:]):
+        return "service"
+    return None
+
+
+def _classify_crontab(tokens):
+    if tokens[1:] == ["-l"]:
+        return "read"
+    return "service"
+
+
+def _classify_wrapper(tokens, depth):
+    """env / nohup / time / sudo / xargs are launchers: the payload
+    decides the class, not the wrapper. Returns None if the verb is
+    not a wrapper."""
+    verb = os.path.basename(tokens[0])
+    rest = tokens[1:]
+    if verb == "env":
+        i = 0
+        while i < len(rest):
+            t = rest[i]
+            if t in ("-i", "--ignore-environment", "-0", "--null",
+                     "--debug"):
+                i += 1
+            elif t in ("-u", "--unset", "-S", "--split-string"):
+                i += 2
+            elif t == "--":
+                i += 1
+                break
+            elif "=" in t and not t.startswith("-"):
+                i += 1  # VAR=value assignment
+            else:
+                break
+        payload = rest[i:]
+        if not payload:
+            return "read"  # bare env prints the environment
+        return _classify(" ".join(payload), depth + 1)
+    if verb in ("nohup", "time"):
+        if not rest:
+            return "unclassified"
+        return _classify(" ".join(rest), depth + 1)
+    if verb == "sudo":
+        if not rest:
+            return "unclassified"
+        inner = _classify(" ".join(rest), depth + 1)
+        return _strictest([inner, "service"])
+    if verb == "xargs":
+        i = 0
+        while i < len(rest):
+            t = rest[i]
+            if t in ("-I", "-L", "-n", "-P", "-s", "-E", "-e", "-d",
+                     "-a"):
+                i += 2
+            elif t.startswith("-"):
+                i += 1
+            else:
+                break
+        payload = rest[i:]
+        if not payload:
+            return "unclassified"
+        return _classify(" ".join(payload), depth + 1)
+    return None
+
+
+def _classify_direct(part, depth):
+    """Price one simple command with no substitution (handled by the
+    caller), after basename normalization."""
+    part = _normalized(part)
     for pat in DESTRUCTIVE_PATTERNS:
         if re.search(pat, part):
             return "destructive"
-    # Output redirect to a file is a write, even on read verbs (echo > f).
     if has_output_redirect(part):
         return "file-op"
+    tokens = _tokens(part)
+    if tokens:
+        verb = os.path.basename(tokens[0])
+        if verb == "git":
+            return _classify_git(tokens)
+        wrapped = _classify_wrapper(tokens, depth)
+        if wrapped is not None:
+            return wrapped
+        rule = None
+        if verb == "find":
+            rule = _classify_find(tokens, depth)
+        elif verb == "sed":
+            rule = _classify_sed(tokens)
+        elif verb == "awk":
+            rule = _classify_awk(tokens)
+        elif verb == "sort":
+            rule = _classify_sort(tokens)
+        elif verb == "uniq":
+            rule = _classify_uniq(tokens)
+        elif verb == "journalctl":
+            rule = _classify_journalctl(tokens)
+        elif verb == "date":
+            rule = _classify_date(tokens)
+        elif verb == "crontab":
+            rule = _classify_crontab(tokens)
+        if rule is not None:
+            return rule
     for pat in READ_PATTERNS:
         if re.search(pat, part):
             return "read"
-    for pat in GIT_PATTERNS:
-        if re.search(pat, part):
-            return "git"
     for pat in FILE_OP_PATTERNS:
         if re.search(pat, part):
             return "file-op"
@@ -172,15 +506,32 @@ def classify_single(part):
     return "unclassified"
 
 
-def classify(command):
-    """Classify a full command; compounds take the strictest part class."""
+def _classify_single(part, depth):
+    if depth > 4:
+        return "unclassified"
+    inners, unbalanced = _substitution_inners(part)
+    if unbalanced:
+        return "unclassified"
+    classes = [_classify_direct(part, depth)]
+    classes += [_classify(s, depth + 1) for s in inners]
+    return _strictest(classes)
+
+
+def classify_single(part):
+    """Classify one shell-simple command (no compounds)."""
+    return _classify_single(part, 0)
+
+
+def _classify(command, depth):
     if not command or not command.strip():
         return "empty"
-    classes = [classify_single(p) for p in split_compound(command)]
-    for c in CLASS_SEVERITY:
-        if c in classes:
-            return c
-    return "unclassified"
+    classes = [_classify_single(p, depth) for p in split_compound(command)]
+    return _strictest(classes) if classes else "empty"
+
+
+def classify(command):
+    """Classify a full command; compounds take the strictest part class."""
+    return _classify(command, 0)
 
 
 def classify_parts(command):
@@ -284,27 +635,33 @@ def ucii_check(command, cmd_class):
 # Local policy fallback (owner only, v1 behavior)
 # ---------------------------------------------------------------------------
 
-def local_decide(policy, agent, command, cmd_class):
+def local_decide_parts(policy, agent, parts):
+    """Local fallback, judged per part.
+
+    A grant authorizes only the part its pattern matches — never the
+    whole compound string (attack battery 8-01: a `cat` grant priced a
+    `chmod` riding in the same command when the pattern was searched
+    against the full string). The owner entitlement covers every part
+    except destructive, which decide() denies before this is consulted.
+    """
     now = utcnow()
     agents = policy.get("agents", {})
     info = agents.get(agent, {})
     entitlement = info.get("entitlement", "none")
-
-    for g in policy.get("grants", []):
-        if g.get("agent") != agent:
+    grants = [g for g in policy.get("grants", [])
+              if g.get("agent") == agent
+              and g.get("expires_at", "") >= now]
+    for part, cls in parts:
+        if cls == "destructive":
+            return False, "destructive never goes through the gate"
+        if any(re.search(g.get("command_pattern", r"(?!)"), part)
+               for g in grants):
             continue
-        if g.get("expires_at", "") < now:
+        if entitlement == "owner":
             continue
-        if re.search(g.get("command_pattern", r"(?!)"), command):
-            return True, "explicit grant %s (local fallback)" % g.get("id", "?")
-
-    if entitlement == "owner":
-        if cmd_class == "destructive":
-            return False, ("destructive requires explicit owner grant "
-                           "(local fallback)")
-        return True, "owner entitlement (local fallback)"
-
-    return False, "no UCII credential and no local entitlement"
+        return False, ("no grant matches part %r (%s) and no local "
+                       "entitlement" % (part[:60], cls))
+    return True, "local fallback (per-part)"
 
 
 # ---------------------------------------------------------------------------
@@ -326,11 +683,16 @@ def decide(command, agent):
     Every part of a compound command must be authorized. Returns
     (allowed, reason, via, cmd_class) where cmd_class is the strictest
     part class for the audit log.
+
+    Destructive is denied here, at the gate, before the server or any
+    grant is consulted — it never goes through the gate. If the server
+    cannot be consulted at all, local policy judges every part
+    (all-or-nothing fallback).
     """
     parts = classify_parts(command)
     cmd_class = classify(command)
     if cmd_class == "destructive":
-        return (False, "destructive requires explicit owner grant",
+        return (False, "destructive never goes through the gate",
                 "gate", cmd_class)
     if cmd_class == "empty":
         return False, "empty command", "gate", cmd_class
@@ -340,19 +702,18 @@ def decide(command, agent):
         if c not in distinct and c not in ("empty",):
             distinct.append(c)
 
-    via, reasons = "ucii-server", []
+    reasons = []
     for cls in distinct:
         result = ucii_check(command, cls)
         if result is None:
             policy = load_json(POLICY_PATH, {})
-            allowed, reason = local_decide(policy, agent, command, cls)
-            via = "local-policy"
-        else:
-            allowed, reason = result
+            allowed, reason = local_decide_parts(policy, agent, parts)
+            return allowed, reason, "local-policy", cmd_class
+        allowed, reason = result
         if not allowed:
-            return False, reason, via, cmd_class
+            return False, reason, "ucii-server", cmd_class
         reasons.append("%s: %s" % (cls, reason))
-    return True, "; ".join(reasons), via, cmd_class
+    return True, "; ".join(reasons), "ucii-server", cmd_class
 
 
 def main():
