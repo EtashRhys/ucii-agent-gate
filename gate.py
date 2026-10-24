@@ -42,6 +42,9 @@ from datetime import datetime, timezone
 GATE_DIR = os.path.dirname(os.path.abspath(__file__))
 POLICY_PATH = os.path.join(GATE_DIR, "policy.json")
 CREDENTIAL_PATH = os.path.join(GATE_DIR, "ucii_credential.json")
+CHECK_SIGNING_KEY_PATH = os.path.join(
+    GATE_DIR, "check_signing_key.json"
+)
 AUDIT_PATH = os.path.join(GATE_DIR, "audit.log")
 IDENTITY_PATH = os.path.join(GATE_DIR, "identity.json")
 
@@ -566,6 +569,69 @@ def load_json(path, default):
         return default
 
 
+def verify_check_response(result, request_message):
+    """Verify the server's signature on a check response (fix #1).
+
+    Returns None when the response is authentic, bound to this exact
+    request, and unexpired; otherwise a denial reason. A verification
+    failure is a HARD denial - the caller must not fall back to local
+    policy for it (that fallback exists for an unreachable server,
+    not for an untrustworthy answer).
+    """
+    import hashlib
+    import io
+    try:
+        key_cfg = load_json(CHECK_SIGNING_KEY_PATH, {})
+        key_id = key_cfg.get("key_id")
+        pub_b64 = key_cfg.get("public_key_b64")
+        if not key_id or not pub_b64:
+            return "UCII response unverifiable: no pinned signing key"
+        if result.get("server_key_id") != key_id:
+            return "UCII response denied: signing key id mismatch"
+        signature = result.get("server_signature")
+        server_ts = result.get("server_ts")
+        expires_at = result.get("expires_at")
+        if not signature or not server_ts or not expires_at:
+            return "UCII response denied: unsigned check response"
+        canonical = "|".join([
+            "ucii-check-response-v1",
+            key_id,
+            result.get("identity_id", ""),
+            result.get("operation", ""),
+            "true" if result.get("authorized") else "false",
+            "true" if result.get("executed") else "false",
+            result.get("credential_fingerprint", ""),
+            result.get("credential_status", ""),
+            result.get("authority_state", ""),
+            result.get("authority_id") or "",
+            hashlib.sha256(request_message.encode()).hexdigest(),
+            server_ts,
+            expires_at,
+        ])
+        try:
+            import contextlib
+            with contextlib.redirect_stdout(io.StringIO()):
+                import oqs
+            verifier = oqs.Signature("ML-DSA-65")
+            ok = verifier.verify(
+                canonical.encode(),
+                base64.b64decode(signature),
+                base64.b64decode(pub_b64),
+            )
+        except Exception:
+            return "UCII response denied: signature verification error"
+        if not ok:
+            return "UCII response denied: signature invalid"
+        exp = datetime.fromisoformat(expires_at)
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > exp:
+            return "UCII response denied: signed response expired"
+        return None
+    except Exception:
+        return "UCII response denied: verification failure"
+
+
 def ucii_check(command, cmd_class):
     """
     Ask the UCII server. Returns (allowed, reason) or None when the
@@ -593,11 +659,11 @@ def ucii_check(command, cmd_class):
     # check is bound to this exact moment and command (replay-resistant).
     import hashlib
     message = "|".join([
-        "ucii-gate-check-v1",
+        "ucii-gate-check-v2",
         identity_id,
         operation,
         utcnow(),
-        hashlib.sha256(command.encode()).hexdigest()[:16],
+        hashlib.sha256(command.encode()).hexdigest(),
     ])
     try:
         sig = oqs.Signature("ML-DSA-65", base64.b64decode(secret_b64))
@@ -623,6 +689,10 @@ def ucii_check(command, cmd_class):
             result = json.loads(resp.read().decode())
     except Exception:
         return None  # server unreachable; fall back
+
+    problem = verify_check_response(result, message)
+    if problem is not None:
+        return False, problem
 
     if result.get("authorized"):
         return True, "UCII delegated authority (%s)" % result.get(
