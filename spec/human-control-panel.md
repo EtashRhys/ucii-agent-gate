@@ -43,7 +43,7 @@ Underneath, this is two existing calls back to back:
 
 **Kill.** Revoke with a reason, one confirm, immediate. The agent stops on its next check. If they kill it, they kill it.
 
-**Hall pass.** A hall pass is never a standing grant — that's a policy rail, not a UI choice. The panel offers the existing scoped flow: $25, 2-hour hall pass, one specific command. The customer requests it in the panel; the UCII Admin approves after verifying payment.
+**Hall pass.** A hall pass is never a standing grant — that's a policy rail, not a UI choice. The panel offers the existing scoped flow: free, 2-hour hall pass, one specific command. The customer requests it in the panel; the UCII Admin reviews and approves.
 
 ## Page 2: Operator page
 
@@ -57,7 +57,7 @@ The UCII Admin never needs this page for routine customer actions — customers 
 
 ## Policy rails (UCII Admin's, enforced server-side — not UI suggestions)
 
-- Destructive is never a standing grant. Only the scoped $25 / 2-hour / one-command flow.
+- Destructive is never a standing grant. Only the scoped free / 2-hour / one-command flow.
 - Customers can only grant operation classes the product offers. No custom classes, no escalation paths.
 - The gate still checks every command against the UCII server. The panel changes *grants*; it doesn't bypass *checks*.
 - Billing: the $49/month subscription covers the gating service and unlimited grant rotations. Mid-month kill: no refund — stated plainly at purchase. (UCII Admin's policy call, recorded here.)

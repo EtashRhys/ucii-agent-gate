@@ -2,7 +2,9 @@
 
 **What a hall pass is:** permission for your agent to run **one specific dangerous command, once approved by the UCII Admin, inside a 2-hour window**. Destructive operations (deleting, destroying, wiping) are never part of a standing grant — a hall pass is the only way one runs, and it covers exactly one command, exactly as written, and nothing else.
 
-**Cost:** $25 per pass. **Time:** the Admin reviews requests after verifying payment; expect your key within 24 hours of requesting. The 2-hour window does not start until you activate (step 3), so a slow email never eats your window.
+**Cost:** Free. **Time:** the Admin reviews your request; expect your key within 24 hours of requesting.
+
+**Rule:** Before any destructive grant is allowed, you confirm the exact command in plain writing — what it will destroy, and that it cannot be undone — with your own clicks. No confirmation, no grant. The 2-hour window does not start until you activate (step 3), so a slow email never eats your window.
 
 You will handle three things in this process. Keep them separate in your mind — most confusion comes from mixing them up:
 
@@ -17,7 +19,7 @@ You will handle three things in this process. Keep them separate in your mind �
 ## Step 1 — Request the pass (customer panel)
 
 1. Open the customer panel and load your grant (Authority ID + control secret).
-2. In the **Hall pass — $25** section, type the **exact command** your agent needs to run.
+2. In the **Hall pass** section, type the **exact command** your agent needs to run.
 
    ⚠️ **Character-for-character.** The pass is bound to the command exactly as written — every space, path, and flag. If the command your agent later tries differs by even one character, it will be denied. Double-check it before submitting; a wrong command means a new request.
 3. Submit. The panel shows your **Request ID** and the status **pending**.
@@ -26,7 +28,7 @@ You will handle three things in this process. Keep them separate in your mind �
 
 ## Step 2 — Wait for approval (UCII Admin)
 
-The Admin verifies your $25 payment, then approves the request and emails you your **activation key**.
+The Admin reviews your request and confirms the exact command, then approves the request and emails you your **activation key**.
 
 - The key is generated at approval and shown to the Admin **once** — if the email doesn't arrive within 24 hours, contact the Admin. A lost key cannot be re-sent (only its fingerprint is stored); the unused request is inert — it can never be activated without the key — so simply submit a fresh request.
 - Nothing is live yet. Your agent cannot run the command until you finish step 3.

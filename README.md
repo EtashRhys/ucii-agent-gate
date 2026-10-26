@@ -173,7 +173,7 @@ authority, and the gate enforces it on every command. You can't widen
 it yourself; only the operator can change it. That's the product — if
 you could rewrite your own permissions, they'd be suggestions, not
 protection. Destructive commands are never standing under either
-option: they always require a separate scoped grant ($25, 2-hour
+option: they always require a separate scoped grant (free, 2-hour
 window, one specific command).
 
 ### What this looks like in real life
@@ -195,7 +195,7 @@ window, one specific command).
 
 - **The one-time migration.** You need an agent to run a single
   database migration Saturday morning. Destructive grant: one specific
-  command, 2-hour window, $25. Then it's gone — never a standing
+  command, 2-hour window, free. Then it's gone — never a standing
   permission.
 - **The analytics reader.** Queries your production database for
   reports. Restricted or audit-only: read. It can SELECT all day; it

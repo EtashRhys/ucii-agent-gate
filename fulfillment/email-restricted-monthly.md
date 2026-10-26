@@ -30,7 +30,7 @@ Your panel lets you view status, replace your grant (toggle operations), kill sw
 
 ## What you got
 
-**Restricted** means the operator granted specific operation classes. Your gate denies anything outside the grant. Destructive commands are never standing — use a hall pass ($25) when you need one.
+**Restricted** means the operator granted specific operation classes. Your gate denies anything outside the grant. Destructive commands are never standing — use a hall pass (free) when you need one.
 
 - Monthly billing: $49 CAD/month
 - Unlimited grant rotations included

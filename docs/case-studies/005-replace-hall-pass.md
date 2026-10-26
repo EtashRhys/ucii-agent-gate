@@ -4,6 +4,8 @@
 **Component:** the UCII customer self-serve flows — grant replace, the self-serve grant rails, and the $25 hall-pass destructive window
 **Status:** all flows exercised live on production; one recovery path proven by necessity; three usability defects found and recorded
 
+**Note (Oct 26, 2026):** hall passes are now free. The prices below reflect the price at the time of this exercise (Oct 23, 2026) and are kept as history.
+
 ## Why this exercise existed
 
 Case study 002 closed with two honest admissions under "not established": the customer **replace-grant** flow and the **hall-pass** flow had been inspected in code but never exercised live. Code inspection tells you what a flow is supposed to do. Only running it tells you what it does — and what it feels like to be the customer while it does it.

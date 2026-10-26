@@ -58,7 +58,7 @@ router = APIRouter(
 # ---------------------------------------------------------------------------
 
 # The only operation classes a customer may grant. Destructive is deliberately
-# absent: it is never a standing grant, only the scoped $25 / 2-hour flow.
+# absent: it is never a standing grant, only the scoped free / 2-hour flow.
 CUSTOMER_GRANTABLE_OPERATIONS = frozenset({
     "ssh.exec:read",
     "ssh.exec:git",

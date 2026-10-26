@@ -2,7 +2,7 @@ Subject: Your UCII hall pass key — {{AGENT_NAME}}
 
 Hi,
 
-Payment received ($25 CAD). Your hall pass is approved.
+Your hall pass is approved. Hall passes are free — no payment needed.
 
 ## Your one-time activation key
 

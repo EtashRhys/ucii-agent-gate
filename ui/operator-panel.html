@@ -132,7 +132,7 @@
 
 <div class="card">
   <h2>Hall-pass requests</h2>
-  <p class="fine">Pending customer hall-pass requests. Verify the $25 payment, then approve to get a one-time key (copy it into your email). Or deny with a reason.</p>
+  <p class="fine">Pending customer hall-pass requests. Review the exact command, then approve to get a one-time key (copy it into your email). Or deny with a reason.</p>
   <div>
     <button class="primary" onclick="loadPending()">Refresh pending</button>
   </div>
@@ -251,7 +251,7 @@ async function loadPending() {
   }
 }
 async function approveHp(id) {
-  if (!confirm("Approve hall pass " + id + "? Only after verifying the $25 payment.")) return;
+  if (!confirm("Approve hall pass " + id + "? Only after reviewing the exact command.")) return;
   hpMsg("Approving…", "info");
   try {
     const r = await api("/v1/authorization/delegated/hall-pass/" + encodeURIComponent(id) + "/approve", "POST");

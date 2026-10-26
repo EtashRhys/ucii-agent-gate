@@ -175,13 +175,14 @@
 </div>
 
 <div class="card hidden" id="destrCard">
-  <h2><span class="num">5</span>Hall pass — $25</h2>
+  <h2><span class="num">5</span>Hall pass — free</h2>
   <p class="fine">One specific dangerous command, approved by the UCII Admin, live for 2 hours, then it expires automatically. Hall passes are never standing.</p>
   <p class="warn">⚠️ A hall pass lets your agent run one command that can permanently delete or destroy data. Double-check the exact command before you request it — this cannot be undone.</p>
+  <p class="fine">Free, always. Before any destructive grant is allowed, you confirm the exact command in plain writing — what it will destroy, and that it cannot be undone — with your own clicks. No confirmation, no grant.</p>
   <label>Exact command (must match character-for-character)
     <input type="text" id="hpCommand" placeholder="e.g. rm -rf /var/cache/myapp/*" autocomplete="off">
   </label>
-  <button onclick="requestHallPass()">Request hall pass — $25</button>
+  <button onclick="requestHallPass()">Request hall pass — free</button>
   <div class="msg" id="destrMsg"></div>
   <p class="fine" style="margin-top:1rem">Already have a key? Paste it below to activate your 2-hour window.</p>
   <label>Request ID (from your request)
@@ -336,7 +337,7 @@ async function requestHallPass() {
   if (!current.control_secret) { msg("destrMsg", "Paste your control secret first.", "err"); return; }
   const cmd = document.getElementById("hpCommand").value.trim();
   if (!cmd) { msg("destrMsg", "Type the exact command first.", "err"); return; }
-  if (!confirm("Request a hall pass for exactly: " + cmd + "? The UCII Admin reviews after $25 payment (up to 24 hours).")) return;
+  if (!confirm("Request a hall pass for exactly: " + cmd + "? The UCII Admin reviews your request (up to 24 hours).")) return;
   msg("destrMsg", "Requesting…", "info");
   try {
     const r = await api("/v1/authorization/delegated/" + encodeURIComponent(current.authority_id) + "/hall-pass/request",

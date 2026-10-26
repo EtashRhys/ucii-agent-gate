@@ -32,7 +32,7 @@ Your panel lets you view status, kill switch, request hall passes, and find your
 
 **Audit-only** means trust but verify. All non-destructive operations are allowed — nothing is denied. Every command is logged to your audit trail, and you can kill the whole thing in one click.
 
-Destructive commands are never standing — use a hall pass ($25) when you need one.
+Destructive commands are never standing — use a hall pass (free) when you need one.
 
 - Monthly billing: $49 CAD/month
 - Cancel anytime — revoke the authority, no dark patterns
