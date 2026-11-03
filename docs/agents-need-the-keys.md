@@ -13,12 +13,13 @@ without needing anything else in this document. The body that follows is
 this design's answers to it.
 
 The checklist:
-1. Why can't the agent just hold the secret?
-2. Is the secret actually split, or just stored in two places?
-3. When does the secret exist whole, and who can watch that moment?
-4. Who is trusted, for what, and what can't they do alone?
-5. What happens when pieces are lost, stolen, or below the threshold?
-6. What does the design admit it hasn't solved?
+1. Which adversaries does this defend against?
+2. Why can't the agent just hold the secret?
+3. Is the secret actually split, or just stored in two places?
+4. When does the secret exist whole, and who can watch that moment?
+5. Who is trusted, for what, and what can't they do alone?
+6. What happens when pieces are lost, stolen, or below the threshold?
+7. What does the design admit it hasn't solved?
 
 Terms, defined before use:
 - Agent: a software helper that acts on your behalf — moving money,
@@ -41,7 +42,7 @@ Naming note: an earlier draft called holders custodians. Custodian
 already means a custody bank, and the reader of this document is a bank
 risk team — so the word is retired here.
 
-1. The problem
+The problem
 
 Agents need secrets to do useful work. But giving an agent the secret
 makes that agent the target. The existing answers all share one weakness
@@ -90,7 +91,7 @@ point.
   across separate teams, not one — and a record of every release. Not
   immunity.
 
-2. The shape
+The shape
 
 Don't give any agent the secret. Split it across several holder agents,
 so no single one holds enough to matter. Each holder's grant is tiny and
@@ -105,7 +106,7 @@ The machinery underneath is three primitives: a permission slip, a
 proof, and an off switch. Everything else in this document is those
 three, applied to the problem of holding secrets.
 
-3. The window
+The window
 
 This is the section most designs skip, and it is the one that decides
 whether the rest can be trusted. A design that can't answer this section
@@ -134,7 +135,7 @@ moment, stated plainly:
 If this section is wrong, the rest of the design should not be trusted.
 If it holds, the rest follows.
 
-4. The trust boundary
+The trust boundary
 
 This design does not claim no trust. It names exactly who you trust, for
 what, and what they alone can and cannot do.
@@ -157,20 +158,25 @@ the split. The split protects against the vendor's risk and against a
 holder being breached, not against a breach inside the bank. Naming that
 limit is what makes the rest believable.
 
-5. What fails closed
+What fails closed
 
-- Two holders down: still serving. The design tolerates losing some
-  holders and still rebuilding.
+Reference configuration, illustrative only — 3-of-5: three holders must
+release to rebuild. Thresholds per secret class are still open (see
+What's open); 3-of-5 is the example used here to make this section
+checkable, not a deployment claim.
+- Two holders down: still serving. Three must release, so losing two
+  still rebuilds.
 - One compromised: nothing, on its own. Kill it, re-split, and the
   stolen piece is mathematically dead.
-- Below the threshold: the system refuses rather than risking a bad
-  rebuild. Fail-closed is the feature, not the bug.
+- Below the threshold (fewer than three available in the example): the
+  system refuses rather than risking a bad rebuild. Fail-closed is the
+  feature, not the bug.
 - Through any single-holder loss, service continues with zero
   interruption. Recovery time below the threshold is the time to restore
   a holder and re-split, stated per deployment — it depends on the
   customer's provisioning speed, so no universal number is claimed here.
 
-6. What's open
+What's open
 
 These are not decided, and they are not hidden:
 - Default thresholds per secret class.
