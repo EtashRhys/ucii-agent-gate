@@ -702,6 +702,69 @@ def ucii_check(command, cmd_class):
 
 
 # ---------------------------------------------------------------------------
+# Instruction-fidelity hop recording
+# ---------------------------------------------------------------------------
+# After the gate allows a command, it records one signed hop with the UCII
+# server (POST /v1/verification/fidelity/hops). The hop captures what the
+# gate received (the command, fingerprinted) and what it acted on. The gate
+# runs the command as-is, so the two fingerprints match by construction; if
+# a future gate version restates the command, the drift shows up in the
+# chain. Best-effort: the command is already authorized, so a failed hop
+# POST is logged in the audit line but never blocks the command.
+
+import hashlib
+import uuid
+
+
+def record_fidelity_hop(command, identity_id, grant_id, secret_b64):
+    """Create + sign + POST one hop record. Returns (ok, detail)."""
+    try:
+        import io
+        import contextlib
+        with contextlib.redirect_stdout(io.StringIO()):
+            import oqs
+    except ImportError:
+        return False, "oqs unavailable"
+    received_fp = hashlib.sha256(command.encode()).hexdigest()
+    passed_fp = received_fp  # gate runs the command as-is
+    hop_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).timestamp()
+    chain_id = os.environ.get("UCII_CHAIN_ID") or str(uuid.uuid4())
+    signable = {
+        "hop_id": hop_id,
+        "identity_id": identity_id,
+        "grant_id": grant_id,
+        "received_fingerprint": received_fp,
+        "passed_fingerprint": passed_fp,
+        "timestamp": timestamp,
+    }
+    canonical = json.dumps(signable, sort_keys=True, separators=(",", ":"))
+    try:
+        sig = oqs.Signature("ML-DSA-65", base64.b64decode(secret_b64))
+        signature = sig.sign(canonical.encode()).hex()
+    except Exception as e:
+        return False, "signing the hop failed: %s" % e
+    body = dict(signable)
+    body["chain_id"] = chain_id
+    body["origin_fingerprint"] = received_fp
+    body["signature"] = signature
+    try:
+        req = urllib.request.Request(
+            UCII_SERVER.rstrip("/") + "/v1/verification/fidelity/hops",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode())
+    except Exception as e:
+        return False, "hop POST failed: %s" % e
+    if resp.status == 201 and result.get("stored"):
+        return True, "hop stored: %s (chain %s)" % (hop_id, chain_id)
+    return False, "hop POST returned %s: %s" % (resp.status, result)
+
+
+# ---------------------------------------------------------------------------
 # Local policy fallback (owner only, v1 behavior)
 # ---------------------------------------------------------------------------
 
@@ -812,6 +875,24 @@ def main():
     if not command.strip():
         sys.stderr.write("UCII gate: interactive shells are disabled.\n")
         sys.exit(1)
+
+    # Fidelity hop: record what the gate received and acted on. Best-effort;
+    # the command is already authorized, so a failed hop POST is noted on
+    # stderr but never blocks the command. (The decision itself was already
+    # audited above; the hop lives on the server.)
+    cred = load_json(CREDENTIAL_PATH, {})
+    if cred.get("identity_id") and cred.get("private_key_b64"):
+        # The authority id rides in the UCII reason string
+        # ("UCII delegated authority (<uuid>)"); local-policy fallback has none.
+        m = re.search(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+            reason or "")
+        grant_id = m.group(0) if m else "local-policy"
+        hop_ok, hop_detail = record_fidelity_hop(
+            command, cred["identity_id"], grant_id, cred["private_key_b64"])
+        if not hop_ok:
+            sys.stderr.write("UCII gate: fidelity hop not recorded (%s).\n"
+                             % hop_detail)
 
     os.execvp("/bin/bash", ["/bin/bash", "-c", command])
 
